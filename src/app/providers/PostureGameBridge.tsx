@@ -27,8 +27,8 @@ export function PostureGameBridge() {
 
     if (lastEvent.type === 'recovery_started') {
       game.registerOpportunity()
-      // 회복 기회가 열리면 캐릭터가 "회복 중" 표현을 보입니다. (recover.webp)
-      setIntent('recover')
+      // 확정 bad 진입 즉시 기회가 열리므로, 아직 움츠린 사용자에게
+      // "회복 중" 캐릭터를 보여주지 않습니다. (slouch 유지)
       push({ title: RECOVERY_COPY.inProgress, tone: 'info' })
       return
     }

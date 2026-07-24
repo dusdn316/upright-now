@@ -85,7 +85,15 @@ export function useLiveClassifier(
           multiPerson,
         })
         // 짧은 프레임 누락은 마지막 신뢰 상태를 유지합니다.
-        if (!holdActive) store.setInstant(state, quality)
+        if (!holdActive) {
+          store.setInstant(state, quality)
+          // away/unstable 동안에는 bad 확정용 지속 시간도 진행하지 않습니다.
+          arbiterRef.current = {
+            ...arbiterRef.current,
+            candidate: null,
+            candidateSince: now,
+          }
+        }
       }
 
       // ---- 인물 미감지 → away (연속 프레임 기준)

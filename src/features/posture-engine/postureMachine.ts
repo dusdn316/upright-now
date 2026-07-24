@@ -1,5 +1,4 @@
 import {
-  BAD_HOLD_MS,
   GOOD_RECOVERY_HOLD_MS,
   RECOVERY_COOLDOWN_MS,
   RECOVERY_WINDOW_MS,
@@ -9,24 +8,24 @@ import type { PostureEngineEvent, PostureState } from '@/types'
 /**
  * 자세 상태 머신 — 순수 함수. 시간은 호출자가 넘긴 `now`(performance.now 기반)로만 흐릅니다.
  *
- * QA Lab과 실제 MediaPipe가 이 하나의 머신을 공유합니다.
- * 두 경로 모두 "순간 분류값(instant)"과 현재 시각을 넣고, 머신이
- * bad 지속 → 회복 기회 → good 유지 → 회복 성공 → 냉각의 수명주기를 관리합니다.
+ * 지속 시간의 소유권 (중복 5초 지연 제거):
+ * - "이탈 5초 지속" 검증은 상위 분류기(arbiter, classify.ts HOLD_MS)가 유일하게 소유합니다.
+ * - 이 머신에 들어오는 bad 는 이미 지속 검증을 마친 확정(stable) bad 이므로,
+ *   진입 즉시 회복 기회를 시작합니다. 여기서 다시 5초를 세지 않습니다.
  *
- * 규칙 (docs/06 §10·§11):
- * - bad 가 BAD_HOLD_MS(5s) 연속 → 회복 기회 시작
+ * 규칙:
+ * - 확정 bad 진입 + 냉각 아님 → 회복 기회 즉시 시작 (같은 구간 중복 시작 없음)
  * - 회복 기회 창 RECOVERY_WINDOW_MS(30s)
  * - good 이 GOOD_RECOVERY_HOLD_MS(5s) 연속 유지 → 회복 성공
  * - 성공/실패 후 RECOVERY_COOLDOWN_MS(20s) 냉각
  * - away·unstable 에서는 모든 회복 타이머를 "동결"합니다(실패·콤보 초기화 아님).
+ *   복귀하면 남은 시간부터 이어서 계산합니다.
  */
 export interface PostureMachineState {
   /** 확정 상태 (UI·게임이 보는 값) */
   state: PostureState
   /** 현재 상태로 들어온 시각 */
   enteredAt: number
-  /** bad 가 연속으로 유지된 총 시간 */
-  badHeldMs: number
   /** 회복 기회 */
   recovery: {
     startedAt: number
@@ -42,7 +41,7 @@ export interface PostureMachineState {
 }
 
 export interface PostureMachineInput {
-  /** 순간 분류값 (이미 스무딩·히스테리시스를 거친 값) */
+  /** 확정 분류값 (arbiter 가 지속 시간 검증을 마친 값) */
   instant: PostureState
   now: number
 }
@@ -60,7 +59,6 @@ export function createPostureMachine(now = 0): PostureMachineState {
   return {
     state: 'unstable',
     enteredAt: now,
-    badHeldMs: 0,
     recovery: null,
     cooldownUntil: 0,
     lastTickAt: now,
@@ -76,28 +74,21 @@ export function reducePosture(
   const frozen = FROZEN.includes(instant)
   const events: PostureEngineEvent[] = []
 
-  // 확정 상태는 순간값을 그대로 따릅니다. (스무딩은 상위 분류기 담당)
+  // 확정 상태는 분류기 출력을 그대로 따릅니다.
   const state = instant
   const enteredAt = state === prev.state ? prev.enteredAt : now
-
-  // bad 연속 시간
-  const badHeldMs =
-    state === 'bad' ? prev.badHeldMs + (prev.state === 'bad' ? deltaMs : 0) : 0
 
   let recovery = prev.recovery
   let cooldownUntil = prev.cooldownUntil
 
-  // 1) 회복 기회 시작: bad 5초 연속 + 냉각 아님 + 진행 중 기회 없음
-  if (
-    recovery === null &&
-    state === 'bad' &&
-    badHeldMs >= BAD_HOLD_MS &&
-    now >= cooldownUntil
-  ) {
+  // 1) 회복 기회 시작: 확정 bad + 냉각 아님 + 진행 중 기회 없음 → 즉시.
+  //    (5초 지속 검증은 arbiter 가 이미 끝냈으므로 여기서 다시 기다리지 않습니다)
+  if (recovery === null && state === 'bad' && now >= cooldownUntil) {
     recovery = { startedAt: now, elapsedMs: 0, goodHeldMs: 0 }
     events.push('recovery_started')
   } else if (recovery !== null) {
-    // 2) 회복 기회 진행. away·unstable 에서는 창 시간과 good 유지 시간을 동결합니다.
+    // 2) 회복 기회 진행. away·unstable 에서는 창 시간과 good 유지 시간을 동결하고,
+    //    복귀하면 남은 시간부터 이어서 계산합니다.
     if (frozen) {
       // 아무 것도 진행하지 않음 (실패 처리도 안 함)
     } else {
@@ -124,7 +115,6 @@ export function reducePosture(
   const next: PostureMachineState = {
     state,
     enteredAt,
-    badHeldMs,
     recovery,
     cooldownUntil,
     lastTickAt: now,

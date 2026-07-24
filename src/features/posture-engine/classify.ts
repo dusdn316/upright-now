@@ -4,7 +4,7 @@ import {
   type FeatureKey,
 } from './features'
 import type { CalibrationProfile } from '@/features/calibration/calibrationStore'
-import type { Sensitivity } from '@/constants/posture'
+import { BAD_HOLD_MS, type Sensitivity } from '@/constants/posture'
 
 /**
  * 개인 기준 대비 방향성 편차 → 투표 → 지속 시간 기반 상태 확정 (긴급 안정화)
@@ -157,9 +157,13 @@ export interface ArbiterState {
   candidateSince: number
 }
 
+/**
+ * 상태 확정 지속 시간 — bad 5초의 유일한 소유자입니다.
+ * postureMachine 은 여기서 확정된 bad 를 받아 즉시 회복 기회를 엽니다.
+ */
 const HOLD_MS: Record<ArbiterPosture, number> = {
   warning: 1500,
-  bad: 5000,
+  bad: BAD_HOLD_MS,
   good: 2000,
 }
 
