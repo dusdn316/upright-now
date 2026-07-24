@@ -1,0 +1,52 @@
+[
+  {
+    "out": "public/assets/characters/stage-01/idle.webp",
+    "size": "1024x1024",
+    "webpKB": 48
+  },
+  {
+    "out": "public/assets/characters/stage-02/idle.webp",
+    "size": "1024x1024",
+    "webpKB": 45
+  },
+  {
+    "out": "public/assets/characters/stage-03/attack.webp",
+    "size": "1024x1024",
+    "webpKB": 63
+  },
+  {
+    "out": "public/assets/characters/stage-03/idle.webp",
+    "size": "1024x1024",
+    "webpKB": 42
+  },
+  {
+    "out": "public/assets/characters/stage-03/recover.webp",
+    "size": "1024x1024",
+    "webpKB": 60
+  },
+  {
+    "out": "public/assets/characters/stage-03/slouch.webp",
+    "size": "1024x1024",
+    "webpKB": 63
+  },
+  {
+    "out": "public/assets/characters/stage-03/warning.webp",
+    "size": "1024x1024",
+    "webpKB": 68
+  },
+  {
+    "out": "public/assets/characters/stage-04/idle.webp",
+    "size": "1024x1024",
+    "webpKB": 39
+  },
+  {
+    "out": "public/assets/characters/stage-05/idle.webp",
+    "size": "1024x1024",
+    "webpKB": 38
+  },
+  {
+    "out": "public/assets/characters/stage-06/idle.webp",
+    "size": "1024x1024",
+    "webpKB": 45
+  }
+]

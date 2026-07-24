@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+.env.*.local
+!.env.production
+.vercel
+coverage
+playwright-report
+test-results
+.DS_Store
+*.tsbuildinfo
+incoming-assets
