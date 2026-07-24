@@ -5,6 +5,7 @@ import { PostureMessage, PostureStatusBadge } from '@/components/posture/Posture
 import { RecoveryCombo } from '@/components/session/SessionBits'
 import { Card, CardTitle, StatTile } from '@/components/ui'
 import { QaLabPanel } from '@/features/qa-lab/QaLabPanel'
+import { PostureDebugPanel } from '@/features/qa-lab/PostureDebugPanel'
 import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useCharacterVisualStore } from '@/features/posture-engine/characterVisualStore'
 import { usePostureTicker } from '@/features/posture-engine/usePostureTicker'
@@ -71,7 +72,10 @@ export function QaLab() {
           </div>
         </Card>
 
-        <QaLabPanel />
+        <div className="flex flex-col gap-4">
+          <QaLabPanel />
+          <PostureDebugPanel />
+        </div>
       </div>
     </AppShell>
   )

@@ -26,17 +26,24 @@ export interface PostureEventRecord {
 
 export type PostureSource = 'mock' | 'mediapipe'
 
+export type PostureNotice = 'camera-distance' | null
+
 interface PostureStoreState {
   snapshot: PostureSnapshot
   lastEvent: PostureEventRecord | null
   source: PostureSource
   /** 상위 분류기가 넣는 순간 상태 */
   instant: PostureState
+  /** 분류기가 알린 실제 감지 품질 (없으면 상태에서 유도) */
+  liveQuality: PostureSnapshot['quality'] | null
+  /** bad 가 아닌 안내 배너 (예: 카메라 거리 확인) */
+  notice: PostureNotice
   machine: PostureMachineState
 
   setSource: (source: PostureSource) => void
-  /** 순간 분류값을 넣습니다. (즉시 tick 하여 확정 상태를 갱신) */
-  setInstant: (state: PostureState, now?: number) => void
+  setNotice: (notice: PostureNotice) => void
+  /** 순간 분류값을 넣습니다. quality 를 주면 그대로 표시합니다. */
+  setInstant: (state: PostureState, quality?: PostureSnapshot['quality']) => void
   /** 시간을 진행시켜 회복 수명주기를 굴립니다. */
   tick: (now?: number) => void
   /** QA·테스트 호환: 순간값을 넣고 바로 확정합니다. */
@@ -78,18 +85,23 @@ export const usePostureStore = create<PostureStoreState>((set, get) => ({
   lastEvent: null,
   source: 'mock',
   instant: 'unstable',
+  liveQuality: null,
+  notice: null,
   machine: createPostureMachine(0),
 
   setSource: (source) => set({ source }),
 
-  setInstant: (state) => {
+  setNotice: (notice) => set({ notice }),
+
+  setInstant: (state, quality) => {
     // 순간값을 넣고 확정 상태를 즉시 반영합니다. (회복 수명주기는 tick 이 굴림)
     set((prev) => ({
       instant: state,
+      liveQuality: quality ?? null,
       snapshot: {
         ...prev.snapshot,
         state,
-        quality: qualityFor(state),
+        quality: quality ?? qualityFor(state),
       },
     }))
   },
@@ -108,7 +120,7 @@ export const usePostureStore = create<PostureStoreState>((set, get) => ({
       lastEvent,
       snapshot: {
         state: result.state.state,
-        quality: qualityFor(result.state.state),
+        quality: prev.liveQuality ?? qualityFor(result.state.state),
         recoveryOpportunity: result.recoveryOpportunity,
       },
     })
@@ -131,6 +143,8 @@ export const usePostureStore = create<PostureStoreState>((set, get) => ({
       snapshot: INITIAL_SNAPSHOT,
       lastEvent: null,
       instant: 'unstable',
+      liveQuality: null,
+      notice: null,
       machine: createPostureMachine(0),
     }),
 }))

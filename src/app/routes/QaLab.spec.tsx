@@ -8,6 +8,7 @@ import { useProgressionStore } from '@/features/progression/progressionStore'
 import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { DEMO_PROGRESSION, useDemoStore } from '@/features/demo/demoMode'
+import { resetRewardsForTest } from '@/features/game/rewards'
 import { BOSS_MAX_HP, DAMAGE, REWARD } from '@/constants/game'
 
 function renderAt(path: string) {
@@ -22,6 +23,7 @@ function resetAll() {
   useGameStore.getState().reset()
   usePostureStore.getState().reset()
   useDemoStore.getState().disableDemo()
+  resetRewardsForTest()
 }
 
 describe('QA Lab mock 상태 → 게임 반응 (Phase 1 핵심 흐름)', () => {

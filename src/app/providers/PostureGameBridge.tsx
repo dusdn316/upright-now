@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useGameStore } from '@/features/game/gameStore'
-import { useProgressionStore } from '@/features/progression/progressionStore'
+import { useSessionStore } from '@/features/sessions/sessionStore'
+import { applyReward } from '@/features/game/rewards'
 import { useToast } from './ToastProvider'
 import { RECOVERY_COPY } from '@/constants/copy'
 import { useCharacterVisualStore } from '@/features/posture-engine/characterVisualStore'
@@ -9,8 +10,8 @@ import { useCharacterVisualStore } from '@/features/posture-engine/characterVisu
 /**
  * 자세 엔진 이벤트 → 게임 반응 연결부. UI를 그리지 않습니다.
  *
- * QA Lab이 어느 화면에서 상태를 바꾸든 같은 경로를 타도록 앱 최상단에 둡니다.
- * Phase 3에서 MediaPipe가 같은 이벤트를 내보내면 이 파일은 수정하지 않습니다.
+ * QA Lab 주입과 실제 카메라가 같은 상태 머신·같은 보상 경로를 탑니다.
+ * XP·포인트는 applyReward 만 통해 적립됩니다.
  */
 export function PostureGameBridge() {
   const lastEvent = usePostureStore((s) => s.lastEvent)
@@ -22,7 +23,6 @@ export function PostureGameBridge() {
     handledId.current = lastEvent.id
 
     const game = useGameStore.getState()
-
     const setIntent = useCharacterVisualStore.getState().setIntent
 
     if (lastEvent.type === 'recovery_started') {
@@ -40,19 +40,23 @@ export function PostureGameBridge() {
       return
     }
 
-    // recovery_succeeded — 공격 연출은 attackTick 이 담당하고, 끝나면 idle 로 돌아갑니다.
+    // recovery_succeeded — 전투(피해·콤보)와 보상(XP·포인트)을 분리 적용합니다.
     setIntent(null)
-    const { xp } = game.recoverySucceeded(lastEvent.id)
-    if (xp > 0) {
-      useProgressionStore.getState().addXp(xp)
-      useProgressionStore.getState().addPoints(3)
-    }
+    const { applied } = game.recoverySucceeded(lastEvent.id)
+    if (applied === 0) return // 중복 이벤트
+
+    const sessionId = useSessionStore.getState().sessionId
+    const reward = applyReward({
+      id: `recovery-xp-${lastEvent.id}`,
+      sessionId,
+      type: 'recovery_success',
+    })
 
     push({
       title: RECOVERY_COPY.success,
       description:
-        xp > 0
-          ? `마감괴수에게 특수 공격! +${xp} XP`
+        reward.xp > 0
+          ? `마감괴수에게 특수 공격! +${reward.xp} XP`
           : '마감괴수에게 특수 공격! (이번 세션 XP 보상 상한에 도달했어요)',
       tone: 'success',
     })

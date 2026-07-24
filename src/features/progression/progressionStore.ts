@@ -19,7 +19,7 @@ interface ProgressionStoreState {
   addXp: (amount: number) => void
   addPoints: (amount: number) => void
   markAttendance: (dateKey: string) => void
-  completeSession: (xp: number, points: number, dateKey: string) => void
+  completeSessionMark: (dateKey: string) => void
   reset: () => void
 }
 
@@ -52,10 +52,12 @@ export const useProgressionStore = create<ProgressionStoreState>((set) => ({
         : { attendance: [...s.attendance, dateKey] },
     ),
 
-  completeSession: (xp, points, dateKey) =>
+  /**
+   * 세션 완료 표식 — 출석·완료 수·상점 해제만 갱신합니다.
+   * XP·포인트는 rewards.applyReward 가 유일한 적립 경로입니다.
+   */
+  completeSessionMark: (dateKey) =>
     set((s) => ({
-      xp: s.xp + Math.max(0, xp),
-      points: s.points + Math.max(0, points),
       completedSessions: s.completedSessions + 1,
       shopUnlocked: true,
       attendance: s.attendance.includes(dateKey)

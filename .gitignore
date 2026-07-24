@@ -13,3 +13,6 @@ test-results
 .DS_Store
 *.tsbuildinfo
 incoming-assets
+
+.vercel
+.env*

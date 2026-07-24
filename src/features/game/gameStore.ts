@@ -1,12 +1,12 @@
 import { create } from 'zustand'
 import { applyDamage, createBossState, type BossState } from './damage'
-import { BOSS_MAX_HP, DAMAGE, REWARD } from '@/constants/game'
-import { MAX_REWARDED_RECOVERIES } from '@/constants/posture'
+import { BOSS_MAX_HP, DAMAGE } from '@/constants/game'
 
 /**
- * 세션 1회 동안의 게임 상태.
- * XP·포인트의 "장기 누적"은 progressionStore가 담당하고,
- * 여기서는 이번 세션에서 번 양만 관리합니다.
+ * 세션 1회 동안의 전투·집계 상태.
+ *
+ * XP·포인트 적립은 여기서 하지 않습니다 — 반드시 rewards.applyReward 를 통합니다.
+ * 이 스토어는 보스 피해·콤보·횟수와 "화면 표시용" 세션 획득 집계만 담습니다.
  */
 interface GameStoreState {
   boss: BossState
@@ -14,24 +14,21 @@ interface GameStoreState {
   bestCombo: number
   recoveries: number
   opportunities: number
-  rewardedRecoveries: number
+  /** 화면 표시용 — applyReward 가 채웁니다 */
   sessionXp: number
   sessionPoints: number
   /** 가장 빠른 회복(ms). 회복 기회 시작부터 성공까지 걸린 최소 시간. */
   fastestRecoveryMs?: number
-  /** 진행 중인 회복 기회의 시작 시각 */
   opportunityStartedAt?: number
   /** 공격 연출 트리거. 값이 바뀌면 애니메이션을 1회 재생합니다. */
   attackTick: number
 
   registerOpportunity: (now?: number) => void
-  recoverySucceeded: (
-    eventId: string,
-    now?: number,
-  ) => { applied: number; xp: number }
+  /** 보스 피해 + 콤보. XP 는 applyReward 몫입니다. 중복 eventId 는 무시됩니다. */
+  recoverySucceeded: (eventId: string, now?: number) => { applied: number }
   recoveryMissed: () => void
   sessionCompleted: (eventId: string) => void
-  stretchCompleted: () => void
+  addSessionEarnings: (xp: number, points: number) => void
   reset: () => void
 }
 
@@ -41,7 +38,6 @@ const initialState = {
   bestCombo: 0,
   recoveries: 0,
   opportunities: 0,
-  rewardedRecoveries: 0,
   sessionXp: 0,
   sessionPoints: 0,
   fastestRecoveryMs: undefined as number | undefined,
@@ -65,18 +61,12 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       amount: DAMAGE.recovery,
     })
 
-    // 중복 이벤트: 아무 것도 적립하지 않습니다.
+    // 중복 이벤트: 아무 것도 바꾸지 않습니다.
     if (applied === 0 && prev.boss.processedEventIds.includes(eventId)) {
-      return { applied: 0, xp: 0 }
+      return { applied: 0 }
     }
 
-    // XP 추가 지급은 세션당 상한이 있습니다. (docs/06 §11 MAX_REWARDED_RECOVERIES)
-    const rewarded = prev.rewardedRecoveries < MAX_REWARDED_RECOVERIES
-    const xp = rewarded ? REWARD.recovery.xp : 0
-    const points = rewarded ? REWARD.recovery.points : 0
     const combo = prev.combo + 1
-
-    // 회복 기회 시작부터 성공까지 걸린 시간
     const elapsed =
       prev.opportunityStartedAt === undefined
         ? undefined
@@ -91,15 +81,12 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       combo,
       bestCombo: Math.max(prev.bestCombo, combo),
       recoveries: prev.recoveries + 1,
-      rewardedRecoveries: prev.rewardedRecoveries + (rewarded ? 1 : 0),
-      sessionXp: prev.sessionXp + xp,
-      sessionPoints: prev.sessionPoints + points,
       fastestRecoveryMs,
       opportunityStartedAt: undefined,
       attackTick: prev.attackTick + 1,
     })
 
-    return { applied, xp }
+    return { applied }
   },
 
   /** 회복 기회를 놓쳐도 장기 XP는 차감하지 않습니다. 현재 세션 콤보만 0. */
@@ -111,18 +98,13 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
         eventId,
         amount: DAMAGE.sessionCompleted,
       })
-      return {
-        boss,
-        sessionXp: prev.sessionXp + REWARD.sessionCompleted.xp,
-        sessionPoints: prev.sessionPoints + REWARD.sessionCompleted.points,
-        attackTick: prev.attackTick + 1,
-      }
+      return { boss, attackTick: prev.attackTick + 1 }
     }),
 
-  stretchCompleted: () =>
-    set((prev) => ({
-      sessionXp: prev.sessionXp + REWARD.stretch.xp,
-      sessionPoints: prev.sessionPoints + REWARD.stretch.points,
+  addSessionEarnings: (xp, points) =>
+    set((s) => ({
+      sessionXp: s.sessionXp + Math.max(0, xp),
+      sessionPoints: s.sessionPoints + Math.max(0, points),
     })),
 
   reset: () => set({ ...initialState, boss: createBossState(BOSS_MAX_HP) }),

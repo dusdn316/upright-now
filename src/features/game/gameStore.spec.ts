@@ -1,14 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useGameStore } from './gameStore'
-import { MAX_REWARDED_RECOVERIES } from '@/constants/posture'
-import { DAMAGE, REWARD } from '@/constants/game'
+import { DAMAGE } from '@/constants/game'
 
-describe('gameStore — 회복 보상 규칙 (docs/07 §12)', () => {
+describe('gameStore — 전투·콤보 (XP 는 rewards 가 담당)', () => {
   beforeEach(() => {
     useGameStore.getState().reset()
   })
 
-  it('회복 성공 1회 → 특수 공격 · 콤보 +1 · XP 지급', () => {
+  it('회복 성공 1회 → 특수 공격 · 콤보 +1', () => {
     const before = useGameStore.getState().boss.hp
     const result = useGameStore.getState().recoverySucceeded('r-1')
     const after = useGameStore.getState()
@@ -17,38 +16,36 @@ describe('gameStore — 회복 보상 규칙 (docs/07 §12)', () => {
     expect(after.boss.hp).toBe(before - DAMAGE.recovery)
     expect(after.combo).toBe(1)
     expect(after.recoveries).toBe(1)
-    expect(after.sessionXp).toBe(REWARD.recovery.xp)
     expect(after.attackTick).toBe(1)
   })
 
-  it('같은 이벤트가 두 번 와도 보상은 1회다 (AT-05)', () => {
+  it('같은 이벤트가 두 번 와도 피해·콤보는 1회다 (AT-05)', () => {
     useGameStore.getState().recoverySucceeded('r-1')
     useGameStore.getState().recoverySucceeded('r-1')
     const state = useGameStore.getState()
 
     expect(state.recoveries).toBe(1)
     expect(state.combo).toBe(1)
-    expect(state.sessionXp).toBe(REWARD.recovery.xp)
+    expect(state.boss.hp).toBe(1000 - DAMAGE.recovery)
   })
 
-  it('세션당 XP 추가 지급은 상한이 있다', () => {
-    for (let i = 0; i < MAX_REWARDED_RECOVERIES + 2; i += 1) {
-      useGameStore.getState().recoverySucceeded(`r-${i}`)
-    }
-    const state = useGameStore.getState()
+  it('가장 빠른 회복 시간이 기록된다', () => {
+    useGameStore.getState().registerOpportunity(1000)
+    useGameStore.getState().recoverySucceeded('r-1', 7500)
+    expect(useGameStore.getState().fastestRecoveryMs).toBe(6500)
 
-    expect(state.recoveries).toBe(MAX_REWARDED_RECOVERIES + 2)
-    expect(state.sessionXp).toBe(REWARD.recovery.xp * MAX_REWARDED_RECOVERIES)
+    useGameStore.getState().registerOpportunity(10_000)
+    useGameStore.getState().recoverySucceeded('r-2', 12_000)
+    expect(useGameStore.getState().fastestRecoveryMs).toBe(2000)
   })
 
-  it('회복 기회를 놓치면 현재 콤보만 0이 되고 XP는 줄지 않는다', () => {
+  it('회복 기회를 놓치면 현재 콤보만 0이 된다', () => {
     useGameStore.getState().recoverySucceeded('r-1')
     useGameStore.getState().recoveryMissed()
     const state = useGameStore.getState()
 
     expect(state.combo).toBe(0)
     expect(state.bestCombo).toBe(1)
-    expect(state.sessionXp).toBe(REWARD.recovery.xp)
   })
 
   it('세션 완주는 기본 공격을 한 번만 준다', () => {
@@ -58,5 +55,13 @@ describe('gameStore — 회복 보상 규칙 (docs/07 §12)', () => {
 
     expect(first).toBe(1000 - DAMAGE.sessionCompleted)
     expect(useGameStore.getState().boss.hp).toBe(first)
+  })
+
+  it('addSessionEarnings 는 화면 집계만 올린다', () => {
+    useGameStore.getState().addSessionEarnings(30, 10)
+    useGameStore.getState().addSessionEarnings(100, 100)
+
+    expect(useGameStore.getState().sessionXp).toBe(130)
+    expect(useGameStore.getState().sessionPoints).toBe(110)
   })
 })

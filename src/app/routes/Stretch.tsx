@@ -7,10 +7,9 @@ import { STRETCH_SAFETY } from '@/constants/copy'
 import { ROUTES } from '@/constants/routes'
 import { recommendStretch } from '@/features/stretch/recommend'
 import { useUserStore } from '@/features/onboarding/userStore'
-import { useGameStore } from '@/features/game/gameStore'
-import { useProgressionStore } from '@/features/progression/progressionStore'
+import { useSessionStore } from '@/features/sessions/sessionStore'
+import { applyReward } from '@/features/game/rewards'
 import { useToast } from '@/app/providers/ToastProvider'
-import { REWARD } from '@/constants/game'
 import type { StretchRoutine } from '@/types'
 
 /** S-11 스트레칭 — 모드별 가중 랜덤, 건너뛰기 불이익 없음 (docs/09) */
@@ -52,10 +51,13 @@ export function Stretch() {
   const finish = () => {
     if (done) return
     setDone(true)
-    // 완료 → 방어막 회복 · XP · 포인트
-    useGameStore.getState().stretchCompleted()
-    useProgressionStore.getState().addXp(REWARD.stretch.xp)
-    useProgressionStore.getState().addPoints(REWARD.stretch.points)
+    // 완료 보상 — 반드시 applyReward 를 통해서만
+    const sessionId = useSessionStore.getState().sessionId
+    applyReward({
+      id: `stretch-${sessionId}-${routine.id}-${Date.now()}`,
+      sessionId,
+      type: 'stretch_completed',
+    })
     push({ title: '방어막을 회복했어요! 잠깐의 리셋, 잘했어요.', tone: 'success' })
   }
 

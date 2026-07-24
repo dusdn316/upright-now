@@ -1,32 +1,30 @@
 import { create } from 'zustand'
 import { loadLocal, STORAGE_KEYS } from '@/lib/storage/local'
+import type { FeatureKey } from '@/features/posture-engine/features'
 import type { Sensitivity } from '@/constants/posture'
 
 /**
- * 개인 자세 기준 요약 — docs/06 §6
- * 원본 프레임과 랜드마크 시계열은 저장하지 않습니다. 요약값만 남깁니다.
+ * 개인 자세 기준 요약 v2 — 특징별 median + MAD + 유효 표본 수.
+ * 평균만 저장하지 않습니다. 원본 프레임·랜드마크 시계열은 저장하지 않습니다.
  */
-export interface FeatureVector {
-  /** 어깨 너비로 정규화한 얼굴 폭 (카메라 접근 프록시) */
-  faceWidth: number
-  /** 어깨 중심 대비 얼굴 중심 x 오프셋 (좌우 기울기) */
-  headOffsetX: number
-  /** 어깨 중심 대비 얼굴 중심 y 오프셋 (앞으로/숙임 프록시) */
-  headOffsetY: number
-  /** 좌우 귀 선의 기울기(라디안) */
-  headTilt: number
-  /** 좌우 어깨 높이 차이 (어깨 너비로 정규화) */
-  shoulderTilt: number
+export interface FeatureStat {
+  median: number
+  mad: number
+  validSampleCount: number
 }
 
 export interface CalibrationProfile {
+  version: 2
   id: string
   name: string
   createdAt: number
-  baseline: FeatureVector
-  variance: FeatureVector
+  /** 유효 표본이 충분했던 특징만 담김 */
+  features: Partial<Record<FeatureKey, FeatureStat>>
+  shoulderWidthMedian: number
+  /** 카메라 식별용 안전한 해시 (원본 deviceId 아님) */
+  deviceIdHash: string | null
   quality: {
-    sampleCount: number
+    validSampleCount: number
     meanVisibility: number
   }
 }
@@ -49,10 +47,24 @@ const loaded = loadLocal<PersistShape>(STORAGE_KEYS.calibration, {
   sensitivity: 'default',
 })
 
+// v2 스키마가 아닌 프로필은 사용하지 않습니다. (마이그레이션이 이미 걸러줌)
+const validProfile =
+  loaded.profile && loaded.profile.version === 2 ? loaded.profile : null
+
 export const useCalibrationStore = create<CalibrationStoreState>((set) => ({
-  profile: loaded.profile,
+  profile: validProfile,
   sensitivity: loaded.sensitivity,
   setProfile: (profile) => set({ profile }),
   setSensitivity: (sensitivity) => set({ sensitivity }),
   clear: () => set({ profile: null }),
 }))
+
+/** deviceId 를 저장 가능한 짧은 해시로 바꿉니다. (djb2, 복원 불가) */
+export function hashDeviceId(deviceId: string | null | undefined): string | null {
+  if (!deviceId) return null
+  let hash = 5381
+  for (let i = 0; i < deviceId.length; i += 1) {
+    hash = ((hash << 5) + hash + deviceId.charCodeAt(i)) | 0
+  }
+  return (hash >>> 0).toString(16)
+}

@@ -158,43 +158,49 @@ export function LandingDashboard() {
         </Card>
       ) : (
         <Card tone="pink" className="mb-5">
-          <div className="flex flex-col gap-6 @[760px]:flex-row @[760px]:items-center">
-            <div className="flex justify-center @[760px]:block">
+          {/*
+            히어로 3열: 캐릭터 42 · 제목 30 · 세션 선택 28 (넓은 화면 기준 비율).
+            제목 영역은 최소 300px 을 보장해 단어 단위 세로 줄바꿈을 막습니다.
+          */}
+          <div className="grid items-center gap-6 @[700px]:grid-cols-[minmax(190px,42fr)_minmax(300px,30fr)_minmax(230px,28fr)] @[700px]:gap-4">
+            <div className="flex justify-center">
               <CharacterViewport
                 stage={stage}
                 postureState={isMonitoring ? snapshot.state : 'good'}
-                size={350}
+                size={210}
               />
             </div>
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0">
               <p className="text-xs font-semibold text-ink-soft">현재 상태</p>
-              <p className="mt-1 text-2xl font-bold text-ink">
+              <h2 className="mt-1 text-[28px] leading-[1.3] font-bold text-ink @[700px]:text-[32px]">
                 {/*
                   세션이 돌지 않을 때는 자세 문구를 그대로 보여주지 않습니다.
                   측정하지 않는 상태에서 "측정하기 어려워요"가 큰 제목으로 뜨면
-                  잘못된 인상을 줍니다.
+                  잘못된 인상을 줍니다. 줄바꿈은 keep-all 로 단어 단위 유지.
                 */}
                 {isMonitoring
                   ? POSTURE_COPY[snapshot.state].message
                   : '오늘도 편안한 자세로 시작해 볼까요?'}
-              </p>
-              <div className="mt-2">
-                {isMonitoring ? (
+              </h2>
+              {isMonitoring ? (
+                <div className="mt-2">
                   <PostureStatusBadge
                     state={snapshot.state}
                     quality={snapshot.quality}
                   />
-                ) : (
-                  <Badge tone="muted">세션을 시작하면 자세를 살펴볼게요</Badge>
-                )}
-              </div>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-ink-soft">
+                  세션을 시작하면 자세를 살펴볼게요.
+                </p>
+              )}
               <div className="mt-5">
                 <RecoveryCombo combo={combo} best={bestCombo} />
               </div>
             </div>
 
-            <div className="w-full shrink-0 @[760px]:w-[280px]">
+            <div className="w-full">
               <p className="mb-2 text-xs font-semibold text-ink-soft">이번 세션 길이</p>
               {/*
                 문서(S-01)는 25분 + 15·50분 보조를 말하지만, 3분 데모도 함께 둡니다.

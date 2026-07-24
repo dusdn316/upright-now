@@ -21,14 +21,10 @@ import { usePostureTicker } from '@/features/posture-engine/usePostureTicker'
 import { useLiveClassifier } from '@/features/posture-engine/useLiveClassifier'
 import { useCamera } from '@/features/calibration/useCamera'
 import { useGameStore } from '@/features/game/gameStore'
-import {
-  useCharacterStage,
-  useProgressionStore,
-} from '@/features/progression/progressionStore'
+import { useCharacterStage } from '@/features/progression/progressionStore'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { useDemoStore } from '@/features/demo/demoMode'
-import { useSessionHistoryStore } from '@/features/sessions/sessionHistoryStore'
-import { buildSessionSummary } from '@/features/sessions/buildSummary'
+import { finalizeSession } from '@/features/sessions/finalizeSession'
 import { featureFlags } from '@/lib/feature-flags/flags'
 
 /**
@@ -49,10 +45,10 @@ export function Session() {
   const hasCalibration = useUserStore((s) => s.hasCalibration)
   const isDemo = useDemoStore((s) => s.isDemo)
   const snapshot = usePostureStore((s) => s.snapshot)
+  const notice = usePostureStore((s) => s.notice)
   const visualIntent = useCharacterVisualStore((s) => s.intent)
   const session = useSessionStore()
   const game = useGameStore()
-  const completeSession = useProgressionStore((s) => s.completeSession)
   const completedRef = useRef(false)
 
   const isBad = snapshot.state === 'bad'
@@ -85,42 +81,22 @@ export function Session() {
     return () => window.clearInterval(timer)
   }, [session.status])
 
-  // 세션 완주 → 기본 공격 1회 + 장기 보상 적립 + 기록 저장 (중복 방지)
+  // 타이머 정상 종료 → 단일 종료 함수로 atomic 처리 (중복 종료·중복 보상 차단)
   useEffect(() => {
     if (session.status !== 'completed' || completedRef.current) return
     completedRef.current = true
-
-    useGameStore
-      .getState()
-      .sessionCompleted(`session-complete-${session.sessionId}`)
-    const earned = useGameStore.getState()
-    const dateKey = new Date().toISOString().slice(0, 10)
-    completeSession(earned.sessionXp, earned.sessionPoints, dateKey)
-    if (!isDemo) {
-      useSessionHistoryStore
-        .getState()
-        .add(buildSessionSummary(useSessionStore.getState(), earned, 'completed'))
-    }
+    finalizeSession('timer')
     stopCamera()
-  }, [session.status, session.sessionId, completeSession, isDemo, stopCamera])
+  }, [session.status, stopCamera])
 
   const remaining = remainingMs(session)
   const showAwayPrompt =
     snapshot.state === 'away' && session.awayMs >= AWAY_PROMPT_MS
 
   const endSession = () => {
-    session.finish('aborted')
-    if (!isDemo && session.elapsedMs > 0) {
-      useSessionHistoryStore
-        .getState()
-        .add(
-          buildSessionSummary(
-            useSessionStore.getState(),
-            useGameStore.getState(),
-            'aborted',
-          ),
-        )
-    }
+    // 계획 시간의 80% 이상이면 완료로 인정, 아니면 중도 종료 (완료 보상 0)
+    completedRef.current = true
+    finalizeSession('manual')
     stopCamera()
     navigate(ROUTES.result(sessionId))
   }
@@ -166,6 +142,24 @@ export function Session() {
               <Icon name="play" size={16} />이 세션 시작하기
             </Button>
           </div>
+        </Card>
+      )}
+
+      {notice === 'camera-distance' && (
+        <Card tone="yellow" className="mb-4 p-4">
+          <p className="text-sm font-bold text-ink">카메라 거리 확인</p>
+          <p className="mt-1 text-sm text-ink-soft">
+            지금 카메라와의 거리가 기준을 등록할 때와 달라요. 의자·카메라 위치를
+            맞추거나, 이 자리에 맞게 기준을 다시 등록해 주세요.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="mt-3"
+            onClick={() => navigate(ROUTES.calibration)}
+          >
+            기준 다시 등록
+          </Button>
         </Card>
       )}
 

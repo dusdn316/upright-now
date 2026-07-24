@@ -14,6 +14,8 @@ import {
   useCharacterStage,
   useProgressionStore,
 } from '@/features/progression/progressionStore'
+import { applyReward } from '@/features/game/rewards'
+import { useToast } from '@/app/providers/ToastProvider'
 
 /**
  * S-12 결과 — docs/05, docs/03 UF-12
@@ -26,8 +28,28 @@ export function Result() {
   const session = useSessionStore()
   const game = useGameStore()
   const [progress, setProgress] = useState<string | null>(null)
+  const { push } = useToast()
 
   const completed = session.status === 'completed'
+
+  const selectProgress = (id: string) => {
+    setProgress(id)
+    // 목표 완료 자기보고 → 보너스 (세션당 1회, applyReward 가 중복 차단)
+    if (id === 'done' && completed) {
+      const reward = applyReward({
+        id: `goal-${session.sessionId}`,
+        sessionId: session.sessionId,
+        type: 'goal_completed',
+      })
+      if (reward.applied) {
+        push({
+          title: '오늘 목표 완료! 보너스 상자를 열었어요.',
+          description: `+${reward.xp} XP · +${reward.points}P`,
+          tone: 'success',
+        })
+      }
+    }
+  }
 
   return (
     <AppShell chrome="focus">
@@ -113,7 +135,7 @@ export function Result() {
                   key={option.id}
                   size="sm"
                   variant={progress === option.id ? 'primary' : 'secondary'}
-                  onClick={() => setProgress(option.id)}
+                  onClick={() => selectProgress(option.id)}
                 >
                   {option.label}
                 </Button>

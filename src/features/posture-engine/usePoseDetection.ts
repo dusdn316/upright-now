@@ -1,30 +1,35 @@
 import { useEffect, useRef, useState } from 'react'
 import { loadPoseLandmarker } from '@/lib/mediapipe/loader'
-import { extractFeatures, type FeatureResult, type Landmark } from './features'
+import { analyzeLandmarks, type Landmark, type LandmarkAnalysis } from './features'
 
 /**
- * 비디오 프레임에서 Pose 를 추론해 정규화 특징값을 콜백으로 넘깁니다. — docs/06 §14
+ * 비디오 프레임에서 Pose 를 추론해 랜드마크 분석을 콜백으로 넘깁니다. — docs/06 §14
  *
  * - 추론 빈도를 제한합니다(기본 ~12fps).
  * - 같은 프레임을 중복 처리하지 않습니다.
  * - 원본 프레임·랜드마크 시계열을 저장하지 않습니다. 각 프레임은 즉시 폐기됩니다.
+ * - 두 명 이상 인식되면 multiPerson 으로 알립니다.
  */
+export interface PoseFrame {
+  analysis: LandmarkAnalysis | null
+  multiPerson: boolean
+}
+
 export interface PoseDetectionOptions {
   enabled: boolean
   fps?: number
-  /** 매 추론마다 호출. 인물 미감지 시 null. */
-  onResult: (result: FeatureResult | null) => void
+  onFrame: (frame: PoseFrame) => void
 }
 
 export type ModelStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 export function usePoseDetection(
   videoRef: React.RefObject<HTMLVideoElement | null>,
-  { enabled, fps = 12, onResult }: PoseDetectionOptions,
+  { enabled, fps = 12, onFrame }: PoseDetectionOptions,
 ) {
   const [modelStatus, setModelStatus] = useState<ModelStatus>('idle')
-  const onResultRef = useRef(onResult)
-  onResultRef.current = onResult
+  const onFrameRef = useRef(onFrame)
+  onFrameRef.current = onFrame
 
   useEffect(() => {
     if (!enabled) return
@@ -63,10 +68,13 @@ export function usePoseDetection(
 
         try {
           const result = landmarker.detectForVideo(video, now)
-          const landmarks = result.landmarks?.[0] as Landmark[] | undefined
-          onResultRef.current(landmarks ? extractFeatures(landmarks) : null)
+          const people = result.landmarks ?? []
+          onFrameRef.current({
+            analysis: analyzeLandmarks(people[0] as Landmark[] | undefined),
+            multiPerson: people.length > 1,
+          })
         } catch {
-          onResultRef.current(null)
+          onFrameRef.current({ analysis: null, multiPerson: false })
         }
       }
       loop()

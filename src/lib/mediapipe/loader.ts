@@ -21,7 +21,8 @@ async function build(delegate: 'GPU' | 'CPU'): Promise<PoseLandmarker> {
   return PoseLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: MODEL_URL, delegate },
     runningMode: 'VIDEO',
-    numPoses: 1,
+    // 2로 두어 "두 명 이상 인식" 상황을 감지합니다. 판정에는 첫 번째 사람만 씁니다.
+    numPoses: 2,
   })
 }
 

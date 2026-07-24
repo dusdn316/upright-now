@@ -4,6 +4,7 @@ import {
   tickSession,
   type SessionTimeState,
 } from './sessionMachine'
+import { releaseSessionLocks } from './sessionLocks'
 import { DEFAULT_SESSION_LENGTH_ID, getSessionLength } from '@/constants/session'
 import { DEFAULT_PROFILE_ID } from '@/constants/profiles'
 import type { LearningProfileKind, PostureState, SessionMode } from '@/types'
@@ -69,12 +70,15 @@ export const useSessionStore = create<SessionStoreState>((set) => ({
       }
     }),
 
-  start: (sessionId) =>
+  start: (sessionId) => {
+    // 같은 id 재시작 시 종료 잠금·보상 상한을 풀어줍니다. (finalize 는 동적 import 순환 방지)
+    releaseSessionLocks(sessionId)
     set((s) => ({
       ...createSessionTimeState(s.plannedMs),
       sessionId,
       status: 'running',
-    })),
+    }))
+  },
 
   tick: (deltaMs, posture) =>
     set((s) => tickSession(s, deltaMs * s.timeScale, posture)),
