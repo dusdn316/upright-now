@@ -118,9 +118,17 @@ export function CharacterViewport({
 
   const transition = reducedMotion ? 'none' : `opacity ${CROSSFADE_MS}ms ease-out`
 
+  // away·unstable 에서는 현재 단계 idle 이미지에 투명도·채도 감소를 적용합니다.
+  const dimClass =
+    postureState === 'away'
+      ? 'opacity-55 saturate-50'
+      : postureState === 'unstable'
+        ? 'saturate-[0.4]'
+        : ''
+
   return (
     <figure
-      className={`relative m-0 shrink-0 ${className}`}
+      className={`relative m-0 shrink-0 ${dimClass} ${className}`}
       style={{ width: size, height: size }}
       data-asset-state={resolved ? resolved.state : 'svg-fallback'}
     >

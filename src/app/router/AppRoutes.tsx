@@ -7,15 +7,15 @@ import { SessionSetup } from '@/app/routes/SessionSetup'
 import { Session } from '@/app/routes/Session'
 import { Result } from '@/app/routes/Result'
 import { QaLab } from '@/app/routes/QaLab'
+import { Calibration } from '@/app/routes/Calibration'
+import { Stretch } from '@/app/routes/Stretch'
+import { History } from '@/app/routes/History'
 import {
-  Calibration,
   Growth,
-  History,
   Room,
   RoomNew,
   Settings,
   Shop,
-  Stretch,
 } from '@/app/routes/Placeholder'
 import { featureFlags } from '@/lib/feature-flags/flags'
 

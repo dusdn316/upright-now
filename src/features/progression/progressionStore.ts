@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { xpToStage } from './growth'
+import { loadLocal, STORAGE_KEYS } from '@/lib/storage/local'
 import type { CharacterStage, EquippedItems } from '@/types'
 
 /**
@@ -34,8 +35,11 @@ const initialState = {
   shopUnlocked: false,
 }
 
+const persisted = loadLocal(STORAGE_KEYS.progression, initialState)
+
 export const useProgressionStore = create<ProgressionStoreState>((set) => ({
   ...initialState,
+  ...persisted,
 
   addXp: (amount) => set((s) => ({ xp: s.xp + Math.max(0, amount) })),
 

@@ -17,12 +17,19 @@ import { remainingMs } from '@/features/sessions/sessionMachine'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useCharacterVisualStore } from '@/features/posture-engine/characterVisualStore'
+import { usePostureTicker } from '@/features/posture-engine/usePostureTicker'
+import { useLiveClassifier } from '@/features/posture-engine/useLiveClassifier'
+import { useCamera } from '@/features/calibration/useCamera'
 import { useGameStore } from '@/features/game/gameStore'
 import {
   useCharacterStage,
   useProgressionStore,
 } from '@/features/progression/progressionStore'
 import { useUserStore } from '@/features/onboarding/userStore'
+import { useDemoStore } from '@/features/demo/demoMode'
+import { useSessionHistoryStore } from '@/features/sessions/sessionHistoryStore'
+import { buildSessionSummary } from '@/features/sessions/buildSummary'
+import { featureFlags } from '@/lib/feature-flags/flags'
 
 /**
  * S-09 집중 세션 — 사이드바를 숨기고 대시보드보다 단순하게 (docs/04 §3, docs/05 S-09)
@@ -34,10 +41,13 @@ import { useUserStore } from '@/features/onboarding/userStore'
 export function Session() {
   const navigate = useNavigate()
   const { sessionId = 'demo' } = useParams()
+  const videoRef = useRef<HTMLVideoElement>(null)
 
   const stage = useCharacterStage()
   const soundEnabled = useUserStore((s) => s.soundEnabled)
   const toggleSound = useUserStore((s) => s.toggleSound)
+  const hasCalibration = useUserStore((s) => s.hasCalibration)
+  const isDemo = useDemoStore((s) => s.isDemo)
   const snapshot = usePostureStore((s) => s.snapshot)
   const visualIntent = useCharacterVisualStore((s) => s.intent)
   const session = useSessionStore()
@@ -46,6 +56,23 @@ export function Session() {
   const completedRef = useRef(false)
 
   const isBad = snapshot.state === 'bad'
+
+  // 실제 카메라 자세 감지: 카메라 기능이 켜지고, 기준이 등록됐고, 데모가 아닐 때만.
+  const useRealCamera = featureFlags.camera && hasCalibration && !isDemo
+  const { state: camera, start: startCamera, stop: stopCamera } =
+    useCamera(videoRef)
+  useLiveClassifier(videoRef, camera)
+
+  // 회복 수명주기를 굴리는 상태 머신 티커 (카메라·QA 공통)
+  usePostureTicker(true)
+
+  // 세션이 시작되면 카메라를 켜고, 화면을 떠나면 트랙을 정지합니다.
+  useEffect(() => {
+    if (useRealCamera && session.status === 'running') startCamera()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useRealCamera, session.status === 'running'])
+
+  useEffect(() => stopCamera, [stopCamera])
 
   // 1초 틱. 자세로 집중 여부를 추론하지 않고, 시작 시점부터 시간만 잽니다.
   useEffect(() => {
@@ -58,7 +85,7 @@ export function Session() {
     return () => window.clearInterval(timer)
   }, [session.status])
 
-  // 세션 완주 → 기본 공격 1회 + 장기 보상 적립 (중복 방지)
+  // 세션 완주 → 기본 공격 1회 + 장기 보상 적립 + 기록 저장 (중복 방지)
   useEffect(() => {
     if (session.status !== 'completed' || completedRef.current) return
     completedRef.current = true
@@ -69,7 +96,13 @@ export function Session() {
     const earned = useGameStore.getState()
     const dateKey = new Date().toISOString().slice(0, 10)
     completeSession(earned.sessionXp, earned.sessionPoints, dateKey)
-  }, [session.status, session.sessionId, completeSession])
+    if (!isDemo) {
+      useSessionHistoryStore
+        .getState()
+        .add(buildSessionSummary(useSessionStore.getState(), earned, 'completed'))
+    }
+    stopCamera()
+  }, [session.status, session.sessionId, completeSession, isDemo, stopCamera])
 
   const remaining = remainingMs(session)
   const showAwayPrompt =
@@ -77,11 +110,33 @@ export function Session() {
 
   const endSession = () => {
     session.finish('aborted')
+    if (!isDemo && session.elapsedMs > 0) {
+      useSessionHistoryStore
+        .getState()
+        .add(
+          buildSessionSummary(
+            useSessionStore.getState(),
+            useGameStore.getState(),
+            'aborted',
+          ),
+        )
+    }
+    stopCamera()
     navigate(ROUTES.result(sessionId))
   }
 
   return (
     <AppShell chrome="focus">
+      {/* 자세 분석용 비디오. 화면에 크게 노출하지 않습니다. (docs/05 S-09) */}
+      {useRealCamera && (
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          className="pointer-events-none fixed bottom-3 right-3 h-24 w-32 -scale-x-100 rounded-xl border border-line object-cover opacity-80"
+        />
+      )}
+
       {/* 상단 — 과목·목표만 간결하게 */}
       <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">

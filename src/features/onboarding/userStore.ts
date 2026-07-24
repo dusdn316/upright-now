@@ -1,11 +1,11 @@
 import { create } from 'zustand'
 import { DEFAULT_NICKNAME } from '@/constants/copy'
 import { DEFAULT_PROFILE_ID } from '@/constants/profiles'
+import { loadLocal, STORAGE_KEYS } from '@/lib/storage/local'
 import type { LearningProfileKind } from '@/types'
 
 /**
- * Phase 1은 메모리 저장만 합니다.
- * IndexedDB(Dexie) 영속화는 Phase 2에서 붙입니다.
+ * 실제 사용자 설정을 localStorage 에 저장합니다. (데모 값은 저장하지 않음)
  */
 interface UserStoreState {
   nickname: string
@@ -42,8 +42,11 @@ const initialState = {
   soundEnabled: false,
 }
 
+const persisted = loadLocal(STORAGE_KEYS.user, initialState)
+
 export const useUserStore = create<UserStoreState>((set) => ({
   ...initialState,
+  ...persisted,
 
   setNickname: (value) =>
     set({ nickname: normalizeNickname(value), hasOnboarded: true }),

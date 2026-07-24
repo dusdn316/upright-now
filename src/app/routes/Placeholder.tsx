@@ -47,27 +47,6 @@ export function Placeholder({
   )
 }
 
-export const Calibration = () => (
-  <Placeholder
-    title="자세 기준 등록"
-    description="얼굴과 양쪽 어깨가 보이도록 편안하게 앉은 자세를 5초 동안 등록해요."
-  />
-)
-
-export const Stretch = () => (
-  <Placeholder
-    title="2분 리셋 스트레칭"
-    description="오래 앉아 있던 흐름을 짧게 리셋하는 선택 기능이에요. 건너뛰어도 불이익이 없어요."
-  />
-)
-
-export const History = () => (
-  <Placeholder
-    title="기록"
-    description="주간 출석, 완료 세션, 감지 가능 시간, 회복 성공을 모아서 보여줄 화면이에요."
-  />
-)
-
 export const Shop = () => (
   <Placeholder
     title="상점"

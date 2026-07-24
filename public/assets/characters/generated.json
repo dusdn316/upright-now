@@ -1,8 +1,28 @@
 [
   {
+    "out": "public/assets/characters/stage-01/attack.webp",
+    "size": "1024x1024",
+    "webpKB": 108
+  },
+  {
     "out": "public/assets/characters/stage-01/idle.webp",
     "size": "1024x1024",
     "webpKB": 48
+  },
+  {
+    "out": "public/assets/characters/stage-01/recover.webp",
+    "size": "1024x1024",
+    "webpKB": 86
+  },
+  {
+    "out": "public/assets/characters/stage-01/slouch.webp",
+    "size": "1024x1024",
+    "webpKB": 80
+  },
+  {
+    "out": "public/assets/characters/stage-01/warning.webp",
+    "size": "1024x1024",
+    "webpKB": 79
   },
   {
     "out": "public/assets/characters/stage-02/idle.webp",

@@ -24,12 +24,12 @@ describe('resolveAssetState — 자세 상태·게임 표현 → 에셋 상태',
 })
 
 describe('resolveCharacterAsset — 폴백 순서', () => {
-  it('Lv.3 는 4가지 자세 이미지를 정확히 가진다', () => {
+  it.each([1, 3] as const)('Lv.%i 는 5가지 상태 이미지를 정확히 가진다', (stage) => {
     for (const state of ['idle', 'warning', 'slouch', 'recover', 'attack'] as const) {
-      const result = resolveCharacterAsset(3, state)
+      const result = resolveCharacterAsset(stage, state)
       expect(result?.state).toBe(state)
       expect(result?.exact).toBe(true)
-      expect(result?.src).toContain(`stage-03/${state}.webp`)
+      expect(result?.src).toContain(`stage-0${stage}/${state}.webp`)
     }
   })
 

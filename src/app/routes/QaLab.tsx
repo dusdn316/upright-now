@@ -7,6 +7,7 @@ import { Card, CardTitle, StatTile } from '@/components/ui'
 import { QaLabPanel } from '@/features/qa-lab/QaLabPanel'
 import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useCharacterVisualStore } from '@/features/posture-engine/characterVisualStore'
+import { usePostureTicker } from '@/features/posture-engine/usePostureTicker'
 import { useGameStore } from '@/features/game/gameStore'
 import {
   useCharacterStage,
@@ -21,6 +22,9 @@ export function QaLab() {
   const snapshot = usePostureStore((s) => s.snapshot)
   const visualIntent = useCharacterVisualStore((s) => s.intent)
   const game = useGameStore()
+
+  // 실제 자세 머신을 굴려 QA 상태 주입이 회복 수명주기를 그대로 타게 합니다.
+  usePostureTicker(true)
 
   return (
     <AppShell>

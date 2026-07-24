@@ -25,7 +25,13 @@ export const CHARACTER_ASSETS: Record<
   CharacterStage,
   Partial<Record<CharacterAssetState, string>>
 > = {
-  1: { idle: `${BASE}/stage-01/idle.webp` },
+  1: {
+    idle: `${BASE}/stage-01/idle.webp`,
+    warning: `${BASE}/stage-01/warning.webp`,
+    slouch: `${BASE}/stage-01/slouch.webp`,
+    recover: `${BASE}/stage-01/recover.webp`,
+    attack: `${BASE}/stage-01/attack.webp`,
+  },
   2: { idle: `${BASE}/stage-02/idle.webp` },
   3: {
     idle: `${BASE}/stage-03/idle.webp`,

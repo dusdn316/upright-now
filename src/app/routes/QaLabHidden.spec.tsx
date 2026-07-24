@@ -6,20 +6,19 @@ import { MemoryRouter } from 'react-router-dom'
  * VITE_ENABLE_QA_LAB=false (운영 빌드 기본값) 상황.
  * /lab 라우트와 세션 화면의 QA 패널이 모두 사라져야 합니다. (docs/02 FR-017)
  */
+const OFF = {
+  camera: false,
+  friendRoom: false,
+  realtimeRoom: false,
+  pictureInPicture: false,
+  qaLab: false,
+  optionalSlouchCalibration: false,
+}
+
 vi.mock('@/lib/feature-flags/flags', () => ({
-  featureFlags: {
-    realtimeRoom: false,
-    pictureInPicture: false,
-    qaLab: false,
-    optionalSlouchCalibration: false,
-  },
+  featureFlags: OFF,
   parseFlag: () => false,
-  readFeatureFlags: () => ({
-    realtimeRoom: false,
-    pictureInPicture: false,
-    qaLab: false,
-    optionalSlouchCalibration: false,
-  }),
+  readFeatureFlags: () => OFF,
 }))
 
 const { App } = await import('@/app/App')

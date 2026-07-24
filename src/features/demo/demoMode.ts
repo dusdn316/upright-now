@@ -34,6 +34,8 @@ export const useDemoStore = create<DemoStoreState>((set) => ({
   isDemo: false,
 
   enableDemo: () => {
+    // isDemo 를 먼저 켜서, 이어지는 스토어 변경이 영속화되지 않게 합니다.
+    set({ isDemo: true })
     useProgressionStore.setState({
       xp: DEMO_PROGRESSION.xp,
       points: DEMO_PROGRESSION.points,
@@ -43,7 +45,6 @@ export const useDemoStore = create<DemoStoreState>((set) => ({
       hasOnboarded: true,
       hasCalibration: true,
     })
-    set({ isDemo: true })
   },
 
   disableDemo: () => {
