@@ -27,6 +27,23 @@ export function createGiraffeSync(): GiraffeSyncState {
   return { marks: [] }
 }
 
+/**
+ * 싱크 피해용 결정적 uuid — 두 회복 이벤트 uuid 를 XOR 해 만듭니다.
+ * 두 클라이언트가 같은 값을 계산하므로 DB 가 1회만 적용하고,
+ * 원본 회복 이벤트 id 와 겹치지 않아 dedup 테이블과 충돌하지 않습니다.
+ */
+export function deriveSyncEventId(a: string, b: string): string {
+  const hexA = a.replaceAll('-', '')
+  const hexB = b.replaceAll('-', '')
+  let out = ''
+  for (let i = 0; i < 32; i += 1) {
+    const xa = Number.parseInt(hexA[i] ?? '0', 16)
+    const xb = Number.parseInt(hexB[i] ?? '0', 16)
+    out += (xa ^ xb).toString(16)
+  }
+  return `${out.slice(0, 8)}-${out.slice(8, 12)}-${out.slice(12, 16)}-${out.slice(16, 20)}-${out.slice(20, 32)}`
+}
+
 export function registerRecovery(
   state: GiraffeSyncState,
   event: { eventId: string; participantId: string; timestamp: number },

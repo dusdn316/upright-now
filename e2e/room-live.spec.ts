@@ -79,6 +79,13 @@ test.describe('실제 2인 친구 방', () => {
     await expect(pageA.getByText('남은 시간')).toBeVisible({ timeout: 20_000 })
     await expect(pageB.getByText('남은 시간')).toBeVisible({ timeout: 20_000 })
 
+    // 연결 끊김 → 개인 세션은 계속 (재연결은 이후 흐름이 증명)
+    await contextB.setOffline(true)
+    await pageB.waitForTimeout(1500)
+    await expect(pageB.getByText('남은 시간')).toBeVisible()
+    await contextB.setOffline(false)
+    await pageB.waitForTimeout(2500)
+
     // 공동 보스 초기 HP 2000 동기화
     const bossA = pageA.getByRole('progressbar', { name: /마감괴수/ })
     await expect(bossA).toHaveAttribute('value', '100')
@@ -111,6 +118,11 @@ test.describe('실제 2인 친구 방', () => {
     // 두 회복(-80) + 싱크(-60) = 1860 → 93%
     await expect(bossA).toHaveAttribute('value', '93', { timeout: 20_000 })
     await expect(bossB).toHaveAttribute('value', '93', { timeout: 20_000 })
+
+    // A 스트레칭 완료 → 공동 방어막 +15 (B 화면에서 확인)
+    await pageA.getByRole('button', { name: '스트레칭 예약' }).click()
+    await pageA.getByRole('button', { name: '완료' }).click()
+    await expect(pageB.getByText(/방어막 15/)).toBeVisible({ timeout: 20_000 })
 
     // 카메라 영상·프레임·랜드마크·bad 상태 전송 0건
     expect(offenders).toEqual([])

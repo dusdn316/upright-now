@@ -8,7 +8,7 @@ import {
   type ReactionKind,
   type RoomEvent,
 } from './roomEvents'
-import { createGiraffeSync, registerRecovery } from './giraffeSync'
+import { createGiraffeSync, deriveSyncEventId, registerRecovery } from './giraffeSync'
 import { useRoomStore, type MemberState } from './roomStore'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { xpToStage } from '@/features/progression/growth'
@@ -24,6 +24,7 @@ import { useProgressionStore } from '@/features/progression/progressionStore'
 let channel: RealtimeChannel | null = null
 let giraffe = createGiraffeSync()
 let reconnectTimer: number | null = null
+let pollTimer: number | null = null
 let reconnectDeadline = 0
 
 const store = () => useRoomStore.getState()
@@ -76,6 +77,12 @@ function handleEvent(event: RoomEvent): void {
 
   const isMine = event.participantId === s.myId
 
+  // 성공 이벤트가 오면 곧 DB HP·방어막이 바뀌므로 잠시 후 재조회합니다.
+  if (event.type !== 'reaction_sent' && s.roomId) {
+    const roomId = s.roomId
+    window.setTimeout(() => void refreshRoomRow(roomId), 800)
+  }
+
   if (event.type === 'recovery_earned') {
     if (!isMine) {
       s.patch({ lastFriendEvent: `${event.nickname}님이 회복 에너지를 보냈어요.` })
@@ -88,8 +95,10 @@ function handleEvent(event: RoomEvent): void {
     giraffe = result.state
     if (result.sync && result.pairIds && s.roomId) {
       s.patch({ syncFlashAt: Date.now() })
-      // 두 클라이언트가 같은 결정적 event_id 로 호출 → DB 가 1회만 적용합니다.
-      void applyDamageRpc(s.roomId, result.pairIds[0], 'giraffe_sync', ROOM_DAMAGE.giraffeSync)
+      // 두 클라이언트가 같은 결정적 event_id(파생 uuid)로 호출 → DB 가 1회만 적용.
+      // 원본 회복 id 를 재사용하면 dedup 테이블과 충돌하므로 파생 id 를 씁니다.
+      const syncId = deriveSyncEventId(result.pairIds[0], result.pairIds[1])
+      void applyDamageRpc(s.roomId, syncId, 'giraffe_sync', ROOM_DAMAGE.giraffeSync)
     }
     return
   }
@@ -125,28 +134,44 @@ async function broadcast(event: RoomEvent): Promise<void> {
   await channel.send({ type: 'broadcast', event: 'room_event', payload: safe })
 }
 
+function startPolling(roomId: string): void {
+  if (pollTimer) window.clearInterval(pollTimer)
+  // postgres_changes publication 이 없는 프로젝트에서도 상태·HP 가 따라오도록 폴링합니다.
+  pollTimer = window.setInterval(() => {
+    const phase = store().phase
+    if (phase === 'waiting' || phase === 'running') void refreshRoomRow(roomId)
+  }, 3000)
+}
+
 function subscribeChannel(roomId: string, code: string): void {
+  startPolling(roomId)
   void (async () => {
     const supabase = await getSupabase()
     if (!supabase) return
 
     channel = supabase.channel(`room:${code}`, {
-      config: { presence: { key: store().myId ?? undefined }, private: true },
+      // private 채널은 realtime.messages RLS 정책이 필요합니다. 현재 스키마에는 없어
+      // 표준 채널을 씁니다. 방 데이터 자체는 테이블 RLS + RPC 검증으로 보호됩니다.
+      config: { presence: { key: store().myId ?? undefined } },
     })
 
     channel
       .on('presence', { event: 'sync' }, () => {
         const presence = channel?.presenceState() ?? {}
-        const members = Object.values(presence)
-          .flat()
-          .map((raw) => raw as unknown as ReturnType<typeof myPresence>)
-          .map((m) => ({
-            participantId: m.participantId,
-            nickname: m.nickname,
-            stage: m.stage,
-            state: m.state,
-            isHost: m.isHost,
-          }))
+        // track() 재호출 시 메타가 누적될 수 있어 participantId 기준
+        // "마지막 메타"만 남깁니다. (준비 상태 갱신이 옛 메타에 가려지는 것 방지)
+        const byId = new Map<string, ReturnType<typeof myPresence>>()
+        for (const raw of Object.values(presence).flat()) {
+          const m = raw as unknown as ReturnType<typeof myPresence>
+          if (m.participantId) byId.set(m.participantId, m)
+        }
+        const members = [...byId.values()].map((m) => ({
+          participantId: m.participantId,
+          nickname: m.nickname,
+          stage: m.stage,
+          state: m.state,
+          isHost: m.isHost,
+        }))
         store().patch({ members })
       })
       .on('broadcast', { event: 'room_event' }, ({ payload }) => {
@@ -369,6 +394,8 @@ export async function sendReaction(reaction: ReactionKind): Promise<void> {
 
 export async function leaveRoom(): Promise<void> {
   if (reconnectTimer) window.clearTimeout(reconnectTimer)
+  if (pollTimer) window.clearInterval(pollTimer)
+  pollTimer = null
   await channel?.unsubscribe()
   channel = null
   giraffe = createGiraffeSync()

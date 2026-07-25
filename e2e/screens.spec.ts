@@ -37,18 +37,29 @@ test.describe('1440x1000', () => {
   test('02 카메라 안내', async ({ page }) => {
     await page.goto('/camera')
 
-    // 카메라 플래그가 꺼져 있으면 데모가 주 CTA 입니다.
-    await expect(
-      page.getByRole('button', { name: '카메라 없이 3분 데모' }),
-    ).toBeVisible()
-    await expect(
-      page.getByRole('button', { name: '카메라 연결하기' }),
-    ).toHaveCount(0)
-    await expect(
-      page.getByText(
-        '현재 데모에서는 카메라 없이 자세 상태와 게임 흐름을 체험할 수 있어요.',
-      ),
-    ).toBeVisible()
+    const cameraOn = process.env.VITE_ENABLE_CAMERA === 'true'
+    if (cameraOn) {
+      // 카메라 플래그 ON: 연결 버튼과 데모 버튼이 함께 보입니다.
+      await expect(
+        page.getByRole('button', { name: '카메라 연결하기' }),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('button', { name: '카메라 없이 3분 데모' }),
+      ).toBeVisible()
+    } else {
+      // 카메라 플래그 OFF: 데모가 주 CTA 입니다.
+      await expect(
+        page.getByRole('button', { name: '카메라 없이 3분 데모' }),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('button', { name: '카메라 연결하기' }),
+      ).toHaveCount(0)
+      await expect(
+        page.getByText(
+          '현재 데모에서는 카메라 없이 자세 상태와 게임 흐름을 체험할 수 있어요.',
+        ),
+      ).toBeVisible()
+    }
 
     await settle(page)
     await page.screenshot({ path: `${DIR}/02-camera-1440.png`, fullPage: true })

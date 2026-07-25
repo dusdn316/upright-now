@@ -46,7 +46,7 @@
   (equippedJacketId/equippedBackpackId 분리 유지 → 이미지 레이어 교체 용이)
 - 성장 단계는 XP 파생(`xpToStage`) — stage 별도 저장 금지
 
-## 친구 방 (Gate 2 — 코드 완성, 플래그 off)
+## 친구 방 (라이브 검증 완료 — Production 활성)
 
 - `features/rooms/`: roomService(익명 인증·RPC·Presence·Broadcast·30s 재연결) ·
   roomStore · giraffeSync(10s 창, 이벤트 재사용 금지) · roomEvents(payload 검증)
@@ -81,11 +81,11 @@
 ```
 npm run lint / typecheck / test / test:e2e / build
 ```
-173 unit + 67 e2e 통과(+room-live 1 skip). e2e 는 포트 5273 자체 서버.
+173 unit + 68 e2e 통과(라이브 2인 room 포함). e2e 는 포트 5273 자체 서버.
 
 ## 남은 리스크 / 다음 작업
 
 1. 실카메라 임계값(tolerance 바닥값·yaw 0.7)은 합성 데이터 기준 — 실기기 튜닝 필요
-2. 친구 방: Supabase 자격 증명이 아직 없어 라이브 미검증 — 위 활성화 절차 4단계면 끝
+2. 친구 방 실환경 노트: presence 메타는 participantId 로 dedupe(최신 우선), 기린 싱크 피해는 두 회복 uuid 의 XOR 파생 id 사용(원본 id 재사용 시 dedup 충돌), realtime.messages RLS 정책이 없어 표준(비 private) 채널 사용 — 정책 추가 시 private 전환 가능
 3. Lv.2/4/5/6 상태 에셋 · 의상 이미지 레이어 · 모션 WebM 미보유
 4. recovery_started 토스트 카피("돌아오는 중이에요") 검토

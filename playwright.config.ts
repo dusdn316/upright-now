@@ -2,10 +2,13 @@ import { defineConfig, devices } from '@playwright/test'
 import { existsSync, readFileSync } from 'node:fs'
 
 // .env.local 을 읽어 라이브 친구 방 테스트(room-live)가 env 를 인식하게 합니다.
+// 주의: 값의 따옴표를 벗겨야 합니다 — process.env 는 Vite 의 .env 파싱보다 우선합니다.
 if (existsSync('.env.local')) {
   for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
     const match = /^([A-Z_]+)=(.*)$/.exec(line.trim())
-    if (match && !process.env[match[1]]) process.env[match[1]] = match[2]
+    if (match && !process.env[match[1]]) {
+      process.env[match[1]] = match[2].replace(/^"(.*)"$/, '$1')
+    }
   }
 }
 
