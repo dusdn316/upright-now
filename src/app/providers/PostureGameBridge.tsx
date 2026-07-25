@@ -6,6 +6,8 @@ import { applyReward } from '@/features/game/rewards'
 import { useToast } from './ToastProvider'
 import { RECOVERY_COPY } from '@/constants/copy'
 import { useCharacterVisualStore } from '@/features/posture-engine/characterVisualStore'
+import { useRoomStore } from '@/features/rooms/roomStore'
+import { reportRecovery } from '@/features/rooms/roomService'
 
 /**
  * 자세 엔진 이벤트 → 게임 반응 연결부. UI를 그리지 않습니다.
@@ -51,6 +53,11 @@ export function PostureGameBridge() {
       sessionId,
       type: 'recovery_success',
     })
+
+    // 친구 방 세션 중이면 공동 보스에도 회복 에너지를 보냅니다. (성공 이벤트만 공유)
+    if (useRoomStore.getState().phase === 'running') {
+      void reportRecovery()
+    }
 
     push({
       title: RECOVERY_COPY.success,

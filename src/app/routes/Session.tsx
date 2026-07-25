@@ -26,6 +26,8 @@ import { useUserStore } from '@/features/onboarding/userStore'
 import { useDemoStore } from '@/features/demo/demoMode'
 import { finalizeSession } from '@/features/sessions/finalizeSession'
 import { featureFlags } from '@/lib/feature-flags/flags'
+import { useRoomStore } from '@/features/rooms/roomStore'
+import { useToast } from '@/app/providers/ToastProvider'
 
 /**
  * S-09 집중 세션 — 사이드바를 숨기고 대시보드보다 단순하게 (docs/04 §3, docs/05 S-09)
@@ -38,6 +40,7 @@ export function Session() {
   const navigate = useNavigate()
   const { sessionId = 'demo' } = useParams()
   const videoRef = useRef<HTMLVideoElement>(null)
+  const { push } = useToast()
 
   const stage = useCharacterStage()
   const soundEnabled = useUserStore((s) => s.soundEnabled)
@@ -88,6 +91,29 @@ export function Session() {
     finalizeSession('timer')
     stopCamera()
   }, [session.status, stopCamera])
+
+  // 친구 방 세션 — 공동 보스 표시 + 친구 성공 이벤트·기린 싱크 알림
+  const roomPhase = useRoomStore((s) => s.phase)
+  const roomBossHp = useRoomStore((s) => s.bossHp)
+  const roomBossMax = useRoomStore((s) => s.bossMaxHp)
+  const roomShield = useRoomStore((s) => s.shield)
+  const lastFriendEvent = useRoomStore((s) => s.lastFriendEvent)
+  const syncFlashAt = useRoomStore((s) => s.syncFlashAt)
+  const isRoomSession = roomPhase === 'running'
+
+  useEffect(() => {
+    if (!lastFriendEvent) return
+    push({ title: lastFriendEvent, tone: 'info' })
+    useRoomStore.getState().patch({ lastFriendEvent: null })
+  }, [lastFriendEvent, push])
+
+  useEffect(() => {
+    if (!syncFlashAt) return
+    push({
+      title: '두 사람의 회복 에너지가 연결됐어요. 기린 싱크!',
+      tone: 'success',
+    })
+  }, [syncFlashAt, push])
 
   const remaining = remainingMs(session)
   const showAwayPrompt =
@@ -210,10 +236,15 @@ export function Session() {
 
           <div className="mt-4 rounded-2xl bg-surface/80 p-4">
             <BossHealthBar
-              hp={game.boss.hp}
-              maxHp={game.boss.maxHp}
+              hp={isRoomSession ? roomBossHp : game.boss.hp}
+              maxHp={isRoomSession ? roomBossMax : game.boss.maxHp}
               attackTick={game.attackTick}
             />
+            {isRoomSession && (
+              <p className="mt-1 tabular text-xs text-ink-soft">
+                {`공동 보스 · 방어막 ${roomShield}`}
+              </p>
+            )}
           </div>
         </Card>
 

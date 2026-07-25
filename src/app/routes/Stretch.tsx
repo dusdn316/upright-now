@@ -9,6 +9,8 @@ import { recommendStretch } from '@/features/stretch/recommend'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { applyReward } from '@/features/game/rewards'
+import { useRoomStore } from '@/features/rooms/roomStore'
+import { reportStretchComplete } from '@/features/rooms/roomService'
 import { useToast } from '@/app/providers/ToastProvider'
 import type { StretchRoutine } from '@/types'
 
@@ -85,6 +87,10 @@ export function Stretch() {
         description: `+${outcome.xp} XP · +${outcome.points}P`,
         tone: 'success',
       })
+      // 친구 방이면 공동 방어막에도 반영합니다.
+      if (useRoomStore.getState().roomId) {
+        void reportStretchComplete()
+      }
     }
   }
 

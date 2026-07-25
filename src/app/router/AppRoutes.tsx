@@ -13,7 +13,8 @@ import { History } from '@/app/routes/History'
 import { Growth } from '@/app/routes/Growth'
 import { Shop } from '@/app/routes/Shop'
 import { Settings } from '@/app/routes/Settings'
-import { Room, RoomNew } from '@/app/routes/Placeholder'
+import { RoomNew } from '@/app/routes/RoomNew'
+import { Room } from '@/app/routes/Room'
 import { featureFlags } from '@/lib/feature-flags/flags'
 
 /** 라우트 — docs/04_IA.md §1 */

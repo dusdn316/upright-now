@@ -13,8 +13,9 @@ create table if not exists public.rooms (
     check (duration_seconds in (180, 900, 1500, 3000)),
   status text not null default 'waiting'
     check (status in ('waiting', 'running', 'resting', 'completed', 'closed')),
-  boss_hp integer not null default 1000 check (boss_hp >= 0),
-  boss_max_hp integer not null default 1000 check (boss_max_hp > 0),
+  boss_hp integer not null default 2000 check (boss_hp >= 0),
+  boss_max_hp integer not null default 2000 check (boss_max_hp > 0),
+  shield integer not null default 0 check (shield >= 0),
   started_at timestamptz,
   ended_at timestamptz,
   created_at timestamptz not null default now(),
@@ -294,3 +295,50 @@ using (public.is_room_member(room_id));
 grant execute on function public.create_room(text, text, text, text, integer) to authenticated;
 grant execute on function public.join_room(text, text) to authenticated;
 grant execute on function public.apply_room_damage(uuid, uuid, text, integer) to authenticated;
+
+-- 스트레칭 완료 → 공동 방어막 +15 (원자적, event_id 중복 차단)
+create or replace function public.apply_room_shield(
+  p_room_id uuid,
+  p_event_id uuid,
+  p_amount integer
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_shield integer;
+  v_inserted integer;
+begin
+  if not public.is_room_member(p_room_id) then
+    raise exception 'not a room member';
+  end if;
+
+  if p_amount < 0 or p_amount > 50 then
+    raise exception 'invalid shield amount';
+  end if;
+
+  insert into public.room_events_processed (
+    event_id, room_id, user_id, event_type
+  ) values (
+    p_event_id, p_room_id, auth.uid(), 'stretch_completed'
+  ) on conflict do nothing;
+
+  get diagnostics v_inserted = row_count;
+
+  if v_inserted = 0 then
+    select shield into v_shield from public.rooms where id = p_room_id;
+    return v_shield;
+  end if;
+
+  update public.rooms
+  set shield = shield + p_amount
+  where id = p_room_id
+  returning shield into v_shield;
+
+  return v_shield;
+end;
+$$;
+
+grant execute on function public.apply_room_shield(uuid, uuid, integer) to authenticated;
