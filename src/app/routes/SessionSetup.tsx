@@ -7,6 +7,7 @@ import { SESSION_LENGTHS } from '@/constants/session'
 import { FRIEND_ROOM } from '@/constants/copy'
 import { featureFlags } from '@/lib/feature-flags/flags'
 import { useToast } from '@/app/providers/ToastProvider'
+import { openPip } from '@/features/pip/pipController'
 import { LEARNING_PROFILES } from '@/constants/profiles'
 import { ROUTES } from '@/constants/routes'
 import { useSessionStore } from '@/features/sessions/sessionStore'
@@ -28,6 +29,17 @@ export function SessionSetup() {
     resetGame()
     const id = `s-${Date.now()}`
     start(id)
+    // PiP 는 사용자 제스처가 필요 — 같은 click handler 안에서 요청합니다.
+    if (useUserStore.getState().pipAutoOpen) {
+      void openPip().then((result) => {
+        if (result !== 'opened') {
+          push({
+            title: '작은 별도 창을 열지 못해 화면 안 미니 위젯으로 표시해요.',
+            tone: 'info',
+          })
+        }
+      })
+    }
     navigate(ROUTES.session(id))
   }
 

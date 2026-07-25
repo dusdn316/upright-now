@@ -13,10 +13,13 @@ interface UserStoreState {
   profileId: LearningProfileKind
   hasCalibration: boolean
   soundEnabled: boolean
+  /** 세션 시작 시 PiP 미니 위젯 자동 열기 */
+  pipAutoOpen: boolean
   setNickname: (value: string) => void
   setProfile: (id: LearningProfileKind) => void
   setCalibrated: (value: boolean) => void
   toggleSound: () => void
+  togglePipAutoOpen: () => void
   reset: () => void
 }
 
@@ -40,6 +43,7 @@ const initialState = {
   profileId: DEFAULT_PROFILE_ID as LearningProfileKind,
   hasCalibration: false,
   soundEnabled: false,
+  pipAutoOpen: false,
 }
 
 const persisted = loadLocal(STORAGE_KEYS.user, initialState)
@@ -56,6 +60,9 @@ export const useUserStore = create<UserStoreState>((set) => ({
   setCalibrated: (value) => set({ hasCalibration: value }),
 
   toggleSound: () => set((s) => ({ soundEnabled: !s.soundEnabled })),
+
+  togglePipAutoOpen: () =>
+    set((s) => ({ pipAutoOpen: !s.pipAutoOpen })),
 
   reset: () => set(initialState),
 }))

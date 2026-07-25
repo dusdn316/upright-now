@@ -8,7 +8,7 @@ import {
   PostureStatusBadge,
 } from '@/components/posture/PostureStatusBadge'
 import { RecoveryCombo, SessionTimer } from '@/components/session/SessionBits'
-import { Badge, Button, Card, CardTitle, StatTile } from '@/components/ui'
+import { Button, Card, CardTitle, StatTile } from '@/components/ui'
 import { Icon } from '@/components/ui/Icon'
 import { AWAY_PROMPT_MS } from '@/constants/posture'
 import { AWAY_PROMPT } from '@/constants/copy'
@@ -28,6 +28,9 @@ import { finalizeSession } from '@/features/sessions/finalizeSession'
 import { featureFlags } from '@/lib/feature-flags/flags'
 import { useRoomStore } from '@/features/rooms/roomStore'
 import { useToast } from '@/app/providers/ToastProvider'
+import { closePip, openPip, registerAutoPip } from '@/features/pip/pipController'
+import { usePipStore } from '@/features/pip/pipStore'
+import { MiniPostureWidget } from '@/components/session/MiniPostureWidget'
 
 /**
  * S-09 집중 세션 — 사이드바를 숨기고 대시보드보다 단순하게 (docs/04 §3, docs/05 S-09)
@@ -90,7 +93,14 @@ export function Session() {
     completedRef.current = true
     finalizeSession('timer')
     stopCamera()
+    closePip() // 세션이 끝나면 PiP·미니 위젯을 자동으로 닫습니다
   }, [session.status, stopCamera])
+
+  // PiP 폴백 상태 + 자동 PiP(선택 확장, 카메라 사용 중일 때만 의미)
+  const pipFallback = usePipStore((s) => s.fallbackActive)
+  useEffect(() => {
+    if (useRealCamera && session.status === 'running') registerAutoPip()
+  }, [useRealCamera, session.status])
 
   // 친구 방 세션 — 공동 보스 표시 + 친구 성공 이벤트·기린 싱크 알림
   const roomPhase = useRoomStore((s) => s.phase)
@@ -124,11 +134,15 @@ export function Session() {
     completedRef.current = true
     finalizeSession('manual')
     stopCamera()
+    closePip()
     navigate(ROUTES.result(sessionId))
   }
 
   return (
     <AppShell chrome="focus">
+      {/* PiP 미지원·차단 시 화면 안 미니 위젯 (카메라 영상 미포함) */}
+      {pipFallback && session.status !== 'idle' && <MiniPostureWidget />}
+
       {/* 자세 분석용 비디오. 화면에 크게 노출하지 않습니다. (docs/05 S-09) */}
       {useRealCamera && (
         <video
@@ -163,6 +177,18 @@ export function Session() {
               onClick={() => {
                 useGameStore.getState().reset()
                 session.start(sessionId)
+                // PiP 는 사용자 제스처 필요 — 같은 click handler 에서 요청
+                if (useUserStore.getState().pipAutoOpen) {
+                  void openPip().then((result) => {
+                    if (result !== 'opened') {
+                      push({
+                        title:
+                          '작은 별도 창을 열지 못해 화면 안 미니 위젯으로 표시해요.',
+                        tone: 'info',
+                      })
+                    }
+                  })
+                }
               }}
             >
               <Icon name="play" size={16} />이 세션 시작하기
@@ -284,9 +310,23 @@ export function Session() {
               <Button size="sm" variant="secondary" onClick={toggleSound}>
                 {soundEnabled ? '소리 끄기' : '소리 켜기'}
               </Button>
-              <Button size="sm" variant="secondary" disabled>
-                미니 위젯
-                <Badge tone="muted">준비 중</Badge>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  // 사용자 클릭(제스처) 기반 PiP 열기 — 실패 시 화면 안 위젯
+                  void openPip().then((result) => {
+                    if (result !== 'opened') {
+                      push({
+                        title:
+                          '작은 별도 창을 열지 못해 화면 안 미니 위젯으로 표시해요.',
+                        tone: 'info',
+                      })
+                    }
+                  })
+                }}
+              >
+                미니 위젯 열기
               </Button>
               <Button
                 size="sm"

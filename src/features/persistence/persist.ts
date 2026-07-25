@@ -23,6 +23,7 @@ export function installPersistence(): () => void {
         profileId: s.profileId,
         hasCalibration: s.hasCalibration,
         soundEnabled: s.soundEnabled,
+        pipAutoOpen: s.pipAutoOpen,
       }),
     ),
   )

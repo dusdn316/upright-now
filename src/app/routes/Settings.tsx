@@ -27,6 +27,8 @@ export function Settings() {
   const setNickname = useUserStore((s) => s.setNickname)
   const soundEnabled = useUserStore((s) => s.soundEnabled)
   const toggleSound = useUserStore((s) => s.toggleSound)
+  const pipAutoOpen = useUserStore((s) => s.pipAutoOpen)
+  const togglePipAutoOpen = useUserStore((s) => s.togglePipAutoOpen)
   const sensitivity = useCalibrationStore((s) => s.sensitivity)
   const setSensitivity = useCalibrationStore((s) => s.setSensitivity)
   const profile = useCalibrationStore((s) => s.profile)
@@ -117,6 +119,29 @@ export function Settings() {
               aria-pressed={soundEnabled}
             >
               {soundEnabled ? '켜짐' : '꺼짐'}
+            </Button>
+          </div>
+        </Card>
+
+        {/* PiP 미니 위젯 */}
+        <Card>
+          <CardTitle>미니 위젯</CardTitle>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-ink">세션 시작 시 미니 위젯 자동 열기</p>
+              <p className="mt-0.5 text-xs text-ink-soft">
+                집중 세션을 시작하면 캐릭터·남은 시간을 보여주는 작은 별도
+                창을 자동으로 열어요. 지원하지 않는 브라우저에서는 화면 안
+                미니 위젯으로 대신 보여드려요.
+              </p>
+            </div>
+            <Button
+              variant={pipAutoOpen ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={togglePipAutoOpen}
+              aria-pressed={pipAutoOpen}
+            >
+              {pipAutoOpen ? '켜짐' : '꺼짐'}
             </Button>
           </div>
         </Card>

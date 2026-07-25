@@ -5,6 +5,7 @@ import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useProgressionStore } from '@/features/progression/progressionStore'
 import { useDemoStore } from '@/features/demo/demoMode'
 import { useQaFlagsStore } from './qaFlagsStore'
+import { usePipStore } from '@/features/pip/pipStore'
 import { useCharacterVisualStore } from '@/features/posture-engine/characterVisualStore'
 import { CHARACTER_STAGES } from '@/constants/game'
 import type { CharacterStage, PostureState } from '@/types'
@@ -30,6 +31,8 @@ export interface UprightDevApi {
   /** 캐릭터 이미지 로딩 실패 상황을 흉내 냅니다. (SVG 폴백 확인용) */
   setImagesBroken: (value: boolean) => void
   reset: () => void
+  /** PiP 상태 조회 (e2e 검증용) */
+  getPipState: () => { open: boolean; fallback: boolean }
 }
 
 declare global {
@@ -78,6 +81,11 @@ export function createDevApi(): UprightDevApi {
 
     setImagesBroken: (value) =>
       useQaFlagsStore.getState().setCharacterImagesBroken(value),
+
+    getPipState: () => ({
+      open: usePipStore.getState().pipOpen,
+      fallback: usePipStore.getState().fallbackActive,
+    }),
 
     reset: () => {
       useGameStore.getState().reset()
