@@ -1,10 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { AppShell, PageHeader } from '@/components/layout/AppShell'
-import { GrowthTimeline } from '@/components/character/GrowthTimeline'
 import { Badge, Button, Card } from '@/components/ui'
 import { FRIEND_ROOM, PREPARING_NOTICE } from '@/constants/copy'
 import { ROUTES } from '@/constants/routes'
-import { useProgressionStore } from '@/features/progression/progressionStore'
 
 /**
  * 아직 디자인·상호작용을 구현하지 않은 화면.
@@ -47,13 +45,6 @@ export function Placeholder({
   )
 }
 
-export const Shop = () => (
-  <Placeholder
-    title="상점"
-    description="모은 잎사귀로 대학 컬러 과잠과 캠퍼스 백팩을 고를 수 있어요."
-  />
-)
-
 export const RoomNew = () => (
   <Placeholder
     title="친구 방 만들기"
@@ -69,25 +60,3 @@ export const Room = () => (
     notice={FRIEND_ROOM.toast}
   />
 )
-
-export const Settings = () => (
-  <Placeholder
-    title="설정"
-    description="닉네임, 카메라, 소리, 민감도, 장소 기준, 데이터 초기화를 관리할 화면이에요."
-  />
-)
-
-export function Growth() {
-  const xp = useProgressionStore((s) => s.xp)
-  return (
-    <AppShell>
-      <PageHeader
-        title="성장"
-        description="바른 자세로 회복할 때마다 쌓인 경험치로 6단계 캐릭터가 성장해요."
-      />
-      <Card tone="blue">
-        <GrowthTimeline xp={xp} />
-      </Card>
-    </AppShell>
-  )
-}

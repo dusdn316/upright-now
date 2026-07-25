@@ -1,0 +1,247 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { AppShell, PageHeader } from '@/components/layout/AppShell'
+import {
+  Badge,
+  Button,
+  Card,
+  CardTitle,
+  SegmentedControl,
+  TextField,
+} from '@/components/ui'
+import { Icon } from '@/components/ui/Icon'
+import { PRIVACY } from '@/constants/copy'
+import { ROUTES } from '@/constants/routes'
+import { featureFlags } from '@/lib/feature-flags/flags'
+import { useUserStore } from '@/features/onboarding/userStore'
+import { useCalibrationStore } from '@/features/calibration/calibrationStore'
+import { resetAllData } from '@/features/settings/dataReset'
+import { useToast } from '@/app/providers/ToastProvider'
+import type { Sensitivity } from '@/constants/posture'
+
+/** S-16 설정 — 실제 동작하는 설정 화면 */
+export function Settings() {
+  const navigate = useNavigate()
+  const { push } = useToast()
+  const nickname = useUserStore((s) => s.nickname)
+  const setNickname = useUserStore((s) => s.setNickname)
+  const soundEnabled = useUserStore((s) => s.soundEnabled)
+  const toggleSound = useUserStore((s) => s.toggleSound)
+  const sensitivity = useCalibrationStore((s) => s.sensitivity)
+  const setSensitivity = useCalibrationStore((s) => s.setSensitivity)
+  const profile = useCalibrationStore((s) => s.profile)
+
+  const [nicknameDraft, setNicknameDraft] = useState(nickname)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [cameraLabel, setCameraLabel] = useState<string | null>(null)
+  const [cameraChecking, setCameraChecking] = useState(false)
+
+  const checkCamera = async () => {
+    setCameraChecking(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      const label = stream.getVideoTracks()[0]?.label || '이름 없는 카메라'
+      // 확인 즉시 모든 트랙을 정지합니다. 영상은 사용·저장하지 않습니다.
+      for (const track of stream.getTracks()) track.stop()
+      setCameraLabel(label)
+    } catch {
+      setCameraLabel('카메라를 열 수 없어요. 권한과 연결을 확인해 주세요.')
+    } finally {
+      setCameraChecking(false)
+    }
+  }
+
+  return (
+    <AppShell>
+      <PageHeader
+        title="설정"
+        description="감지 민감도, 소리, 카메라, 개인 자세 기준과 데이터를 관리해요."
+      />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* 닉네임 */}
+        <Card>
+          <CardTitle>닉네임</CardTitle>
+          <div className="mt-3 flex items-end gap-2">
+            <div className="flex-1">
+              <TextField
+                label="별명"
+                id="settings-nickname"
+                maxLength={12}
+                value={nicknameDraft}
+                onChange={(e) => setNicknameDraft(e.target.value)}
+                hint="최대 12자 · 이 브라우저에만 저장돼요"
+              />
+            </div>
+            <Button
+              onClick={() => {
+                setNickname(nicknameDraft)
+                push({ title: '닉네임을 바꿨어요.', tone: 'success' })
+              }}
+            >
+              저장
+            </Button>
+          </div>
+        </Card>
+
+        {/* 감지 민감도 */}
+        <Card>
+          <CardTitle>감지 민감도</CardTitle>
+          <p className="mt-1 text-xs text-ink-soft">
+            개인 기준에서 얼마나 벗어나면 알려줄지 정해요.
+          </p>
+          <div className="mt-3">
+            <SegmentedControl
+              ariaLabel="감지 민감도"
+              columns={3}
+              value={sensitivity}
+              onChange={(id) => setSensitivity(id as Sensitivity)}
+              options={[
+                { id: 'gentle', label: '부드럽게', sublabel: '넓은 허용 범위' },
+                { id: 'default', label: '기본', sublabel: '권장' },
+                { id: 'sensitive', label: '민감하게', sublabel: '좁은 허용 범위' },
+              ]}
+            />
+          </div>
+        </Card>
+
+        {/* 소리 */}
+        <Card>
+          <CardTitle>소리</CardTitle>
+          <div className="mt-3 flex items-center justify-between">
+            <p className="text-sm text-ink-soft">회복·완료 순간의 알림음</p>
+            <Button
+              variant={soundEnabled ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={toggleSound}
+              aria-pressed={soundEnabled}
+            >
+              {soundEnabled ? '켜짐' : '꺼짐'}
+            </Button>
+          </div>
+        </Card>
+
+        {/* 카메라 */}
+        <Card>
+          <CardTitle>카메라</CardTitle>
+          <div className="mt-3 flex flex-col gap-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-ink-soft">카메라 자세 감지</span>
+              <Badge tone={featureFlags.camera ? 'green' : 'muted'}>
+                {featureFlags.camera ? '사용 중' : '사용 안 함'}
+              </Badge>
+            </div>
+            {featureFlags.camera && (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-ink-soft">현재 카메라</span>
+                  <Button size="sm" variant="secondary" onClick={checkCamera} disabled={cameraChecking}>
+                    {cameraChecking ? '확인 중…' : '카메라 확인'}
+                  </Button>
+                </div>
+                {cameraLabel && (
+                  <p className="rounded-xl bg-canvas px-3 py-2 text-xs text-ink">
+                    {cameraLabel}
+                  </p>
+                )}
+              </>
+            )}
+            <p className="text-xs text-ink-soft">{PRIVACY.body}</p>
+          </div>
+        </Card>
+
+        {/* 개인 자세 기준 */}
+        <Card>
+          <CardTitle>개인 자세 기준</CardTitle>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="text-sm text-ink-soft">
+              {profile ? (
+                <>
+                  <Badge tone="green">등록됨</Badge>
+                  <p className="mt-1 text-xs">
+                    {new Date(profile.createdAt).toLocaleString('ko-KR', {
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}{' '}
+                    · 표본 {profile.quality.validSampleCount}개
+                  </p>
+                </>
+              ) : (
+                <Badge tone="muted">등록 전</Badge>
+              )}
+            </div>
+            <Button size="sm" onClick={() => navigate(ROUTES.calibration)}>
+              {profile ? '다시 등록' : '기준 등록'}
+            </Button>
+          </div>
+        </Card>
+
+        {/* 데이터 초기화 */}
+        <Card className="border-coral/40">
+          <CardTitle>전체 로컬 데이터 초기화</CardTitle>
+          <p className="mt-1 text-xs text-ink-soft">
+            이 브라우저에 저장된 모든 기록을 지우고 첫 방문 상태로 돌아가요.
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mt-3 border-coral text-[#b8285a]"
+            onClick={() => setConfirmOpen(true)}
+          >
+            <Icon name="shield" size={16} />
+            모든 데이터 삭제
+          </Button>
+        </Card>
+      </div>
+
+      {/* 삭제 확인 모달 */}
+      {confirmOpen && (
+        <div aria-hidden="true" className="fixed inset-0 z-40 bg-ink/40" />
+      )}
+      {confirmOpen && (
+        <dialog
+          open
+          aria-modal="true"
+          aria-label="데이터 삭제 확인"
+          className="fixed inset-0 z-50 m-0 flex h-full max-h-none w-full max-w-none items-center justify-center bg-transparent p-4"
+        >
+          <Card className="w-full max-w-md">
+            <CardTitle>정말 모든 데이터를 삭제할까요?</CardTitle>
+            <p className="mt-2 text-sm text-ink-soft">아래 항목이 삭제돼요.</p>
+            <ul className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-ink">
+              <li>· 닉네임</li>
+              <li>· 개인 자세 기준</li>
+              <li>· 세션 기록</li>
+              <li>· XP·잎사귀 포인트</li>
+              <li>· 출석</li>
+              <li>· 구매·장착 아이템</li>
+              <li>· 환경 모드</li>
+            </ul>
+            <p className="mt-3 text-xs text-ink-soft">
+              카메라 영상·프레임은 애초에 저장되지 않아요.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setConfirmOpen(false)}>
+                취소
+              </Button>
+              <Button
+                size="sm"
+                className="bg-coral"
+                onClick={() => {
+                  resetAllData()
+                  setConfirmOpen(false)
+                  push({ title: '모든 데이터를 삭제했어요.', tone: 'info' })
+                  navigate(ROUTES.home)
+                }}
+              >
+                삭제하기
+              </Button>
+            </div>
+          </Card>
+        </dialog>
+      )}
+    </AppShell>
+  )
+}

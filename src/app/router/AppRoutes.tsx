@@ -10,13 +10,10 @@ import { QaLab } from '@/app/routes/QaLab'
 import { Calibration } from '@/app/routes/Calibration'
 import { Stretch } from '@/app/routes/Stretch'
 import { History } from '@/app/routes/History'
-import {
-  Growth,
-  Room,
-  RoomNew,
-  Settings,
-  Shop,
-} from '@/app/routes/Placeholder'
+import { Growth } from '@/app/routes/Growth'
+import { Shop } from '@/app/routes/Shop'
+import { Settings } from '@/app/routes/Settings'
+import { Room, RoomNew } from '@/app/routes/Placeholder'
 import { featureFlags } from '@/lib/feature-flags/flags'
 
 /** 라우트 — docs/04_IA.md §1 */

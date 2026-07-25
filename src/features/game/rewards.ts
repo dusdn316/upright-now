@@ -29,6 +29,14 @@ const REWARD_TABLE: Record<RewardType, { xp: number; points: number }> = {
 /** 세션 중 화면 집계(획득 XP·잎사귀)에 반영되는 종류 */
 const SESSION_SCOPED: RewardType[] = ['recovery_success', 'session_completed']
 
+/** 최근 획득 XP 목록에 남길 이름 */
+const REWARD_LABEL: Record<RewardType, string> = {
+  recovery_success: '자세 회복',
+  session_completed: '세션 완주',
+  stretch_completed: '스트레칭',
+  goal_completed: '목표 완료',
+}
+
 const appliedIds = new Set<string>()
 const recoveryCountBySession = new Map<string, number>()
 
@@ -71,7 +79,10 @@ export function applyReward(input: RewardInput): RewardOutcome {
     }
   }
 
-  if (xp > 0) useProgressionStore.getState().addXp(xp)
+  if (xp > 0) {
+    useProgressionStore.getState().addXp(xp)
+    useProgressionStore.getState().logXpGain(REWARD_LABEL[type], xp)
+  }
   if (points > 0) useProgressionStore.getState().addPoints(points)
 
   if (SESSION_SCOPED.includes(type) && (xp > 0 || points > 0)) {

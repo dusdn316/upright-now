@@ -4,6 +4,7 @@ import { useUserStore } from '@/features/onboarding/userStore'
 import { useProgressionStore } from '@/features/progression/progressionStore'
 import { useDemoStore } from '@/features/demo/demoMode'
 import { loadLocal, STORAGE_KEYS } from '@/lib/storage/local'
+import { useCalibrationStore } from '@/features/calibration/calibrationStore'
 
 describe('영속화 — 실제 값만 저장, 데모 값은 저장 안 함', () => {
   beforeEach(() => {
@@ -24,6 +25,44 @@ describe('영속화 — 실제 값만 저장, 데모 값은 저장 안 함', () 
 
     expect(user.nickname).toBe('수현')
     expect(prog.xp).toBe(30)
+    uninstall()
+  })
+
+  it('상점·최근 XP까지 저장되어 새로고침 후 복원된다 (Gate 1)', () => {
+    const uninstall = installPersistence()
+
+    useProgressionStore.setState({ points: 300 })
+    useProgressionStore.getState().purchaseItem('jacket-navy', 100)
+    useProgressionStore.getState().equipItem('jacket', 'jacket-navy')
+    useProgressionStore.getState().logXpGain('스트레칭', 20)
+
+    const saved = loadLocal<{
+      points: number
+      inventory: string[]
+      equipped: { jacketId?: string }
+      recentXp: Array<{ label: string; xp: number }>
+    }>(STORAGE_KEYS.progression, {
+      points: -1,
+      inventory: [],
+      equipped: {},
+      recentXp: [],
+    })
+
+    expect(saved.points).toBe(200)
+    expect(saved.inventory).toContain('jacket-navy')
+    expect(saved.equipped.jacketId).toBe('jacket-navy')
+    expect(saved.recentXp[0]).toMatchObject({ label: '스트레칭', xp: 20 })
+    uninstall()
+  })
+
+  it('설정(민감도)이 저장·복원된다 (Gate 1)', () => {
+    const uninstall = installPersistence()
+    useCalibrationStore.getState().setSensitivity('gentle')
+
+    const saved = loadLocal<{ sensitivity: string }>(STORAGE_KEYS.calibration, {
+      sensitivity: '',
+    })
+    expect(saved.sensitivity).toBe('gentle')
     uninstall()
   })
 

@@ -37,6 +37,7 @@ export function installPersistence(): () => void {
         inventory: s.inventory,
         equipped: s.equipped,
         shopUnlocked: s.shopUnlocked,
+        recentXp: s.recentXp,
       }),
     ),
   )

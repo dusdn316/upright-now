@@ -58,6 +58,28 @@ describe('applyReward — 보상 단일 진입점 (긴급 안정화 F)', () => {
     expect(other.xp).toBe(30)
   })
 
+  it('같은 스트레칭 완료 이벤트 id 는 1회만 보상된다 (Gate 1)', () => {
+    const id = 'stretch-s1-shoulder-roll-1'
+    const first = applyReward({ id, sessionId: 's1', type: 'stretch_completed' })
+    const second = applyReward({ id, sessionId: 's1', type: 'stretch_completed' })
+
+    expect(first).toMatchObject({ applied: true, xp: 20, points: 20 })
+    expect(second.applied).toBe(false)
+    expect(useProgressionStore.getState().xp).toBe(20)
+    expect(useProgressionStore.getState().points).toBe(20)
+  })
+
+  it('XP 획득이 최근 목록(최대 5개)에 남는다 (Gate 1)', () => {
+    useProgressionStore.setState({ recentXp: [] })
+    for (let i = 0; i < 7; i += 1) {
+      applyReward({ id: `g-${i}`, sessionId: 's1', type: 'goal_completed' })
+    }
+    // goal 은 세션당 1회 제약이 없고 id 만 다르면 적립됩니다 (Result 에서 세션당 1회 강제)
+    const recent = useProgressionStore.getState().recentXp
+    expect(recent.length).toBeLessThanOrEqual(5)
+    expect(recent[0].label).toBe('목표 완료')
+  })
+
   it('세션 화면 집계(sessionXp)는 recovery·완료 보상에서만 오른다', () => {
     applyReward({ id: 'r1', sessionId: 's1', type: 'recovery_success' })
     applyReward({ id: 'g1', sessionId: 's1', type: 'goal_completed' })

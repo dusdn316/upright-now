@@ -6,7 +6,14 @@ import type { CharacterStage, EquippedItems } from '@/types'
 /**
  * 장기 성장 — 누적 XP·잎사귀 포인트·출석·인벤토리.
  * 자세가 나빠져도 여기서 값이 줄어드는 경로는 존재하지 않습니다. (AGENTS.md §2.5)
+ * 성장 단계는 항상 XP 에서 파생합니다 — 별도 stage 값을 저장하지 않습니다.
  */
+export interface XpGainRecord {
+  label: string
+  xp: number
+  at: number
+}
+
 interface ProgressionStoreState {
   xp: number
   points: number
@@ -15,11 +22,19 @@ interface ProgressionStoreState {
   inventory: string[]
   equipped: EquippedItems
   shopUnlocked: boolean
+  /** 최근 획득 XP (최대 5개, 최신 먼저) */
+  recentXp: XpGainRecord[]
 
   addXp: (amount: number) => void
   addPoints: (amount: number) => void
+  /** 최근 획득 XP 목록에 기록 — applyReward 가 호출합니다. */
+  logXpGain: (label: string, xp: number) => void
   markAttendance: (dateKey: string) => void
   completeSessionMark: (dateKey: string) => void
+  /** 구매 — 포인트 부족·중복 구매를 막습니다. 성공 여부를 돌려줍니다. */
+  purchaseItem: (itemId: string, price: number) => boolean
+  /** 장착/해제 — 과잠·백팩 각각 하나씩 */
+  equipItem: (type: 'jacket' | 'backpack', itemId: string | undefined) => void
   reset: () => void
 }
 
@@ -33,17 +48,24 @@ const initialState = {
   inventory: [] as string[],
   equipped: {} as EquippedItems,
   shopUnlocked: false,
+  recentXp: [] as XpGainRecord[],
 }
 
 const persisted = loadLocal(STORAGE_KEYS.progression, initialState)
 
-export const useProgressionStore = create<ProgressionStoreState>((set) => ({
+export const useProgressionStore = create<ProgressionStoreState>((set, get) => ({
   ...initialState,
   ...persisted,
+  recentXp: persisted.recentXp ?? [],
 
   addXp: (amount) => set((s) => ({ xp: s.xp + Math.max(0, amount) })),
 
   addPoints: (amount) => set((s) => ({ points: s.points + Math.max(0, amount) })),
+
+  logXpGain: (label, xp) =>
+    set((s) => ({
+      recentXp: [{ label, xp, at: Date.now() }, ...s.recentXp].slice(0, 5),
+    })),
 
   markAttendance: (dateKey) =>
     set((s) =>
@@ -64,6 +86,29 @@ export const useProgressionStore = create<ProgressionStoreState>((set) => ({
         ? s.attendance
         : [...s.attendance, dateKey],
     })),
+
+  purchaseItem: (itemId, price) => {
+    const s = get()
+    if (s.inventory.includes(itemId)) return false // 중복 구매 금지
+    if (s.points < price) return false // 포인트 부족
+    set({
+      points: s.points - price,
+      inventory: [...s.inventory, itemId],
+    })
+    return true
+  },
+
+  equipItem: (type, itemId) => {
+    const s = get()
+    // 보유하지 않은 아이템은 장착할 수 없습니다.
+    if (itemId !== undefined && !s.inventory.includes(itemId)) return
+    set({
+      equipped:
+        type === 'jacket'
+          ? { ...s.equipped, jacketId: itemId }
+          : { ...s.equipped, backpackId: itemId },
+    })
+  },
 
   reset: () => set({ ...initialState }),
 }))

@@ -6,12 +6,12 @@ import type { CharacterStageMeta } from '@/types'
  */
 
 export const CHARACTER_STAGES: CharacterStageMeta[] = [
-  { stage: 1, name: '뽀각 거북', tagline: '아직 목을 숨긴 새내기', requiredXp: 0 },
-  { stage: 2, name: '꿈틀 거북', tagline: '조금씩 목을 내미는 중', requiredXp: 250 },
-  { stage: 3, name: '빼꼼 거부기린', tagline: '기린의 모습이 빼꼼', requiredXp: 600 },
-  { stage: 4, name: '반듯 거부기린', tagline: '목과 몸통이 반듯해지는 중', requiredXp: 1000 },
-  { stage: 5, name: '쭉쭉 기린', tagline: '스스로 자세를 자주 회복해요', requiredXp: 1500 },
-  { stage: 6, name: '우뚝 기린', tagline: '편안한 자세 습관을 완성했어요', requiredXp: 2200 },
+  { stage: 1, name: '뽀각 거북', tagline: '아직 목을 숨긴 새내기', requiredXp: 0, visualDiff: '목을 완전히 숨긴 큰 등껍질' },
+  { stage: 2, name: '꿈틀 거북', tagline: '조금씩 목을 내미는 중', requiredXp: 250, visualDiff: '머리와 짧은 목이 등장해요' },
+  { stage: 3, name: '빼꼼 거부기린', tagline: '기린의 모습이 빼꼼', requiredXp: 600, visualDiff: '짧은 기린 목·작은 뿔·큰 등껍질' },
+  { stage: 4, name: '반듯 거부기린', tagline: '목과 몸통이 반듯해지는 중', requiredXp: 1000, visualDiff: '중간 길이 목과 세워진 몸통' },
+  { stage: 5, name: '쭉쭉 기린', tagline: '스스로 자세를 자주 회복해요', requiredXp: 1500, visualDiff: '완전한 기린 체형과 긴 목' },
+  { stage: 6, name: '우뚝 기린', tagline: '편안한 자세 습관을 완성했어요', requiredXp: 2200, visualDiff: '가장 긴 목·과잠·백팩·당당한 표정' },
 ]
 
 /** 보스에게 주는 피해량 */

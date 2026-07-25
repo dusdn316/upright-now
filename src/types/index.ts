@@ -112,6 +112,8 @@ export interface CharacterStageMeta {
   name: string
   tagline: string
   requiredXp: number
+  /** 이 단계에서 달라지는 외형 설명 */
+  visualDiff: string
 }
 
 /* --------------------------------- 상점 ---------------------------------- */

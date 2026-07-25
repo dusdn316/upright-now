@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { CharacterViewport } from '@/components/character/CharacterViewport'
+import { CharacterWithGear } from '@/components/character/CharacterWithGear'
 import { GrowthTimeline } from '@/components/character/GrowthTimeline'
 import { AttendanceCalendar } from '@/components/dashboard/AttendanceCalendar'
 import { PostureStatusBadge } from '@/components/posture/PostureStatusBadge'
@@ -164,7 +165,7 @@ export function LandingDashboard() {
           */}
           <div className="grid items-center gap-6 @[700px]:grid-cols-[minmax(190px,42fr)_minmax(300px,30fr)_minmax(230px,28fr)] @[700px]:gap-4">
             <div className="flex justify-center">
-              <CharacterViewport
+              <CharacterWithGear
                 stage={stage}
                 postureState={isMonitoring ? snapshot.state : 'good'}
                 size={210}
