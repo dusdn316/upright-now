@@ -15,6 +15,9 @@ import { Shop } from '@/app/routes/Shop'
 import { Settings } from '@/app/routes/Settings'
 import { RoomNew } from '@/app/routes/RoomNew'
 import { Room } from '@/app/routes/Room'
+import { Campus } from '@/app/routes/Campus'
+import { CampusMap } from '@/app/routes/CampusMap'
+import { CampusHistory } from '@/app/routes/CampusHistory'
 import { featureFlags } from '@/lib/feature-flags/flags'
 
 /** 라우트 — docs/04_IA.md §1 */
@@ -43,6 +46,18 @@ export function AppRoutes() {
       <Route path="/room/:roomCode" element={<Room />} />
 
       <Route path="/settings" element={<Settings />} />
+
+      {/*
+        캠퍼스 영토전 — 플래그가 꺼진 빌드에서는 라우트 자체를 등록하지 않습니다.
+        (주소로 직접 들어오면 아래 `*` 가 홈으로 보냅니다 → 404 없음)
+      */}
+      {featureFlags.campusTerritory && (
+        <>
+          <Route path="/campus" element={<Campus />} />
+          <Route path="/campus/map" element={<CampusMap />} />
+          <Route path="/campus/history" element={<CampusHistory />} />
+        </>
+      )}
 
       {/* 운영 빌드에서는 라우트 자체를 등록하지 않습니다. (docs/02 FR-017) */}
       {featureFlags.qaLab && <Route path="/lab" element={<QaLab />} />}

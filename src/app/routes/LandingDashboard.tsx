@@ -31,6 +31,7 @@ import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useDemoStore } from '@/features/demo/demoMode'
 import { formatDuration } from '@/features/sessions/sessionMachine'
+import { CampusDashboardCard } from '@/components/campus/CampusDashboardCard'
 
 /** S-01 랜딩·대시보드 — docs/05_SCREEN_SPEC.md */
 export function LandingDashboard() {
@@ -51,6 +52,9 @@ export function LandingDashboard() {
       rail={
         <>
           <AttendanceCalendar attendance={attendance} />
+
+          {/* 캠퍼스 카드 — 플래그가 꺼져 있으면 렌더되지 않습니다. */}
+          <CampusDashboardCard />
 
           <Card tone="yellow" className="p-4">
             <div className="mb-3 flex items-center justify-between">

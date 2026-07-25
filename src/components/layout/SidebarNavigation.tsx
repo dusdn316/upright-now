@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
-import { SIDEBAR_ITEMS, ROUTES } from '@/constants/routes'
+import type { CSSProperties } from 'react'
+import { SIDEBAR_ITEMS, CAMPUS_NAV_ITEM, ROUTES } from '@/constants/routes'
 import { BRAND, PRIVACY } from '@/constants/copy'
 import { Icon } from '@/components/ui/Icon'
 import { CharacterViewport } from '@/components/character/CharacterViewport'
@@ -11,6 +12,8 @@ import {
 } from '@/features/progression/progressionStore'
 import { getStageMeta } from '@/features/progression/growth'
 import { featureFlags } from '@/lib/feature-flags/flags'
+import { useCampusTheme } from '@/features/campus/campusThemeStore'
+import { CampusProfileBadge } from '@/components/campus/CampusBits'
 
 /** 세션 밖 사이드바 — docs/04_IA.md §3, docs/05 S-01 */
 export function SidebarNavigation() {
@@ -19,6 +22,20 @@ export function SidebarNavigation() {
   const stage = useCharacterStage()
   const points = useProgressionStore((s) => s.points)
   const meta = getStageMeta(stage)
+  const campusTheme = useCampusTheme()
+
+  /**
+   * 캠퍼스 테마가 켜져 있으면 선택 색을 학교 색으로 바꿉니다.
+   * 꺼져 있으면 undefined 를 돌려주어 기존 핑크 선택색이 그대로 유지됩니다.
+   */
+  const activeStyle = (isActive: boolean): CSSProperties | undefined => {
+    if (!isActive || !featureFlags.campusTheme || !campusTheme) return undefined
+    return { backgroundColor: campusTheme.soft, color: campusTheme.deep }
+  }
+
+  const navItems = featureFlags.campusTerritory
+    ? [...SIDEBAR_ITEMS.slice(0, -1), CAMPUS_NAV_ITEM, SIDEBAR_ITEMS[SIDEBAR_ITEMS.length - 1]]
+    : SIDEBAR_ITEMS
 
   return (
     <aside className="flex w-[232px] shrink-0 flex-col gap-6 border-r border-line bg-canvas px-4 py-6">
@@ -41,11 +58,15 @@ export function SidebarNavigation() {
           <p className="truncate text-[11px] text-ink-soft">
             {`Lv.${meta.stage} ${meta.name}`}
           </p>
+          {/* 프로필 학교 배지 — 캠퍼스 테마가 꺼져 있으면 렌더되지 않습니다. */}
+          <div className="mt-1 empty:hidden">
+            <CampusProfileBadge />
+          </div>
         </div>
       </div>
 
       <nav aria-label="주 메뉴" className="flex flex-col gap-1">
-        {SIDEBAR_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -58,6 +79,7 @@ export function SidebarNavigation() {
                   : 'text-ink-soft hover:bg-surface hover:text-ink',
               ].join(' ')
             }
+            style={({ isActive }) => activeStyle(isActive)}
           >
             <Icon name={item.icon} />
             {item.label}

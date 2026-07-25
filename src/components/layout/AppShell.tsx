@@ -52,9 +52,10 @@ export function PageHeader({
   description?: string
   action?: ReactNode
 }) {
+  // flex-wrap: 좁은 폭에서 action 이 제목 아래로 내려가 가로 넘침을 막습니다.
   return (
-    <header className="mb-6 flex items-start justify-between gap-4">
-      <div>
+    <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <div className="min-w-0">
         <h1 className="text-3xl font-bold tracking-tight text-ink">{title}</h1>
         {description && (
           <p className="mt-1.5 text-[15px] text-ink-soft">{description}</p>

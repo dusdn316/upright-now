@@ -13,6 +13,9 @@ const OFF = {
   pictureInPicture: false,
   qaLab: false,
   optionalSlouchCalibration: false,
+  campusTheme: false,
+  campusTerritory: false,
+  campusSchoolPicker: false,
 }
 
 vi.mock('@/lib/feature-flags/flags', () => ({

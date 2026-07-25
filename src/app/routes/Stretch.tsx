@@ -11,6 +11,7 @@ import { useSessionStore } from '@/features/sessions/sessionStore'
 import { applyReward } from '@/features/game/rewards'
 import { useRoomStore } from '@/features/rooms/roomStore'
 import { reportStretchComplete } from '@/features/rooms/roomService'
+import { recordCampusContribution } from '@/features/campus/recordContribution'
 import { useToast } from '@/app/providers/ToastProvider'
 import type { StretchRoutine } from '@/types'
 
@@ -91,6 +92,16 @@ export function Stretch() {
       if (useRoomStore.getState().roomId) {
         void reportStretchComplete()
       }
+      /*
+        캠퍼스 기여도 (+20). 스트레칭 완료 시점을 알 수 있는 곳이 이 화면뿐이라
+        여기에서 호출합니다. 플래그가 꺼져 있으면 즉시 무시되고, 보상 계산에는
+        어떤 영향도 주지 않습니다.
+      */
+      void recordCampusContribution({
+        kind: 'stretch_completed',
+        eventId: `campus-stretch-${attemptIdRef.current}`,
+        sessionId: useSessionStore.getState().sessionId,
+      })
     }
   }
 
