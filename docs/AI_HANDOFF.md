@@ -1,6 +1,6 @@
 # AI_HANDOFF — UpRight Now 작업 인수인계
 
-> 마지막 갱신: 2026-07-25 · FINAL MVP SPRINT (Gate 1~3) 직후
+> 마지막 갱신: 2026-07-25 · PIP 완성 + 친구 방 최종 통합 대기
 
 ## 현재 상태 요약
 
@@ -54,9 +54,14 @@
 - HP 는 DB `rooms.boss_hp` 가 최종 기준, `apply_room_damage`/`apply_room_shield`
   RPC 로만 원자적 변경 (event_id 중복 차단)
 - 전송 금지: 영상·프레임·랜드마크·좌표·bad 상태 — `sanitizeRoomEvent` 가 차단
-- **활성화에 필요한 것**: Supabase 프로젝트 생성 → Anonymous Sign-Ins 켜기 →
-  `supabase/schema.sql` 실행 → env 3개:
-  `VITE_SUPABASE_URL` · `VITE_SUPABASE_ANON_KEY` · `VITE_ENABLE_FRIEND_ROOM=true`
+- **활성화 절차 (env 만 넣으면 끝)**:
+  1. Supabase 프로젝트 생성 → Authentication 에서 Anonymous Sign-Ins 켜기
+  2. SQL Editor 에서 `supabase/schema.sql` 전체 실행 (boss 2000·shield 포함)
+  3. Vercel(Production) + 로컬 `.env.local` 에 env 3개:
+     `VITE_SUPABASE_URL` · `VITE_SUPABASE_ANON_KEY` · `VITE_ENABLE_FRIEND_ROOM=true`
+  4. 라이브 2인 검증: `npx playwright test e2e/room-live.spec.ts`
+     (두 독립 컨텍스트로 생성→입장→준비→시작→HP 동기화→기린 싱크→금지 payload 0건을
+      자동 검증. env 없으면 자동 skip)
 - env 없이도 혼자 모드 전 기능 정상 (테스트로 보장)
 
 ## 저장 (localStorage v2)
@@ -76,11 +81,11 @@
 ```
 npm run lint / typecheck / test / test:e2e / build
 ```
-163 unit + 63 e2e 통과. e2e 는 포트 5273 자체 서버.
+173 unit + 67 e2e 통과(+room-live 1 skip). e2e 는 포트 5273 자체 서버.
 
 ## 남은 리스크 / 다음 작업
 
 1. 실카메라 임계값(tolerance 바닥값·yaw 0.7)은 합성 데이터 기준 — 실기기 튜닝 필요
-2. 친구 방은 Supabase env 투입 후 두 브라우저 실검증 필요 (RLS·재연결 포함)
+2. 친구 방: Supabase 자격 증명이 아직 없어 라이브 미검증 — 위 활성화 절차 4단계면 끝
 3. Lv.2/4/5/6 상태 에셋 · 의상 이미지 레이어 · 모션 WebM 미보유
 4. recovery_started 토스트 카피("돌아오는 중이에요") 검토

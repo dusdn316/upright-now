@@ -1,4 +1,13 @@
 import { defineConfig, devices } from '@playwright/test'
+import { existsSync, readFileSync } from 'node:fs'
+
+// .env.local 을 읽어 라이브 친구 방 테스트(room-live)가 env 를 인식하게 합니다.
+if (existsSync('.env.local')) {
+  for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
+    const match = /^([A-Z_]+)=(.*)$/.exec(line.trim())
+    if (match && !process.env[match[1]]) process.env[match[1]] = match[2]
+  }
+}
 
 /**
  * Phase 1.5 — 시각적 QA와 전체 흐름 검증.
