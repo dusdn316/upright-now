@@ -19,11 +19,12 @@ import {
   useCalibrationStore,
 } from '@/features/calibration/calibrationStore'
 import { useUserStore } from '@/features/onboarding/userStore'
+import { useModeStore } from '@/features/modes/modeStore'
 import type { LandmarkAnalysis, PointName } from '@/features/posture-engine/features'
 
 const QUALITY_COPY: Record<CalibrationQuality, string> = {
   idle: '카메라를 준비하고 있어요.',
-  warming: '카메라를 준비하고 있어요. 곧 시작할게요.',
+  framing: '얼굴과 양쪽 어깨를 확인하고 있어요. 잠깐 그대로 있어 주세요.',
   ok: '좋아요. 그대로 잠깐 유지해 주세요.',
   'no-person': '화면 중앙에 앉아 얼굴이 보이도록 해 주세요.',
   'low-visibility': '얼굴과 양쪽 어깨가 보이게 앉고 주변을 조금 밝혀 주세요.',
@@ -97,7 +98,7 @@ export function Calibration() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const collectRef = useRef(createCollectState())
   const { state: camera, start, stop } = useCamera(videoRef)
-  const setProfile = useCalibrationStore((s) => s.setProfile)
+  const addProfile = useCalibrationStore((s) => s.addProfile)
   const setCalibrated = useUserStore((s) => s.setCalibrated)
 
   const debugOverlay = new URLSearchParams(location.search).get('postureDebug') === '1'
@@ -106,6 +107,15 @@ export function Calibration() {
   const [progress, setProgress] = useState(0)
   const [validCount, setValidCount] = useState(0)
   const [saved, setSaved] = useState(false)
+  const [uiStep, setUiStep] = useState<1 | 2 | 3>(1)
+  const [profileName, setProfileName] = useState('')
+  const savedIdRef = useRef<string | null>(null)
+  // 내부 경로만 허용 — 외부 URL·프로토콜 상대 경로는 무시합니다.
+  const rawReturn = new URLSearchParams(location.search).get('return')
+  const returnTo =
+    rawReturn && rawReturn.startsWith('/') && !rawReturn.startsWith('//')
+      ? rawReturn
+      : null
   const [modelError, setModelError] = useState(false)
   const [lastAnalysis, setLastAnalysis] = useState<LandmarkAnalysis | null>(null)
 
@@ -130,10 +140,19 @@ export function Calibration() {
       setQuality(step.quality)
       setProgress(step.progress)
       setValidCount(step.validCount)
+      setUiStep(step.step)
 
       if (step.profile) {
         // 개인 기준 요약(중앙값·MAD·표본 수)만 저장합니다. 원본은 저장하지 않습니다.
-        setProfile(step.profile)
+        const named = {
+          ...step.profile,
+          name: '기준 ' + (useCalibrationStore.getState().profiles.length + 1),
+        }
+        addProfile(named)
+        savedIdRef.current = named.id
+        setProfileName(named.name)
+        // 현재 활성 모드에 이 기준을 연결합니다.
+        useModeStore.getState().linkCalibration(useModeStore.getState().activeModeId, named.id)
         setCalibrated(true)
         setSaved(true)
       }
@@ -222,14 +241,30 @@ export function Calibration() {
               <p className="mt-1 text-sm text-ink-soft">
                 이제 이 기준과 비교해 자세 변화를 알려드려요.
               </p>
+              <div className="mt-3">
+                <label htmlFor="cal-name" className="text-xs font-semibold text-ink-soft">
+                  기준 이름 (예: 집 책상 · 학교 도서관)
+                </label>
+                <input
+                  id="cal-name"
+                  maxLength={20}
+                  value={profileName}
+                  onChange={(e) => {
+                    setProfileName(e.target.value)
+                    if (savedIdRef.current)
+                      useCalibrationStore.getState().renameProfile(savedIdRef.current, e.target.value)
+                  }}
+                  className="mt-1 block h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink"
+                />
+              </div>
               <Button
                 className="mt-4"
                 onClick={() => {
                   stop()
-                  navigate(ROUTES.sessionSetup)
+                  navigate(returnTo ?? ROUTES.sessionSetup)
                 }}
               >
-                집중 세션 설정으로
+                {returnTo ? '이전 화면으로 돌아가기' : '집중 세션 설정으로'}
               </Button>
             </div>
           ) : (
@@ -245,18 +280,13 @@ export function Calibration() {
               <p className="mt-2 text-xs text-ink-soft tabular">
                 {`유효 표본 ${validCount} / ${MIN_VALID_SAMPLES}`}
               </p>
-              <ul className="mt-4 flex flex-col gap-1.5 text-xs text-ink-soft">
-                <li className="flex items-center gap-2">
-                  <Icon name="check" size={14} /> 얼굴과 양쪽 어깨가 보이게 앉기
-                </li>
-                <li className="flex items-center gap-2">
-                  <Icon name="check" size={14} /> 화면 상단 중앙에 카메라를 두고
-                  조명 확인하기
-                </li>
-                <li className="flex items-center gap-2">
-                  <Icon name="check" size={14} /> 5초간 편안하게 정면 유지하기
-                </li>
-              </ul>
+              <ol className="mt-4 flex flex-col gap-1.5 text-xs">
+                {['얼굴과 양쪽 어깨 확인', '편안한 자세로 5초 유지', '기준 저장 완료'].map((label, i) => (
+                  <li key={label} className={'flex items-center gap-2 ' + (uiStep === i + 1 ? 'font-bold text-ink' : 'text-ink-soft')}>
+                    <Icon name={uiStep > i + 1 ? 'check' : 'clock'} size={14} /> {i + 1}. {label}
+                  </li>
+                ))}
+              </ol>
             </div>
           )}
         </Card>

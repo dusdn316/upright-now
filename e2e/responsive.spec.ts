@@ -36,7 +36,7 @@ for (const viewport of VIEWPORTS) {
       await dev(page, 'setPosture', 'good')
 
       await dev(page, 'setStage', 3)
-      const boss = page.getByRole('progressbar', { name: /마감괴수/ })
+      const boss = page.getByRole('progressbar', { name: /북몽이/ })
       const character = page.locator('main figure[data-asset-state]').first()
       const timer = page.getByText('남은 시간')
 

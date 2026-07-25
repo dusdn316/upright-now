@@ -32,6 +32,9 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        launchOptions: {
+          args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+        },
         viewport: { width: 1440, height: 1000 },
       },
     },

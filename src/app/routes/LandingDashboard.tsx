@@ -31,6 +31,7 @@ import { useGameStore } from '@/features/game/gameStore'
 import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useDemoStore } from '@/features/demo/demoMode'
+import { MONSTER_THEMES, useActiveModeConfig } from '@/features/modes/modeStore'
 import { formatDuration } from '@/features/sessions/sessionMachine'
 import { useSessionHistoryStore } from '@/features/sessions/sessionHistoryStore'
 import {
@@ -43,6 +44,7 @@ import {
 export function LandingDashboard() {
   const navigate = useNavigate()
   const { nickname, hasOnboarded, hasCalibration } = useUserStore()
+  const modeConfig = useActiveModeConfig()
   const stage = useCharacterStage()
   const { xp, points, attendance, completedSessions } = useProgressionStore()
   const { combo, bestCombo } = useGameStore()
@@ -99,6 +101,21 @@ export function LandingDashboard() {
             >
               {featureFlags.friendRoom ? '친구 방 만들기' : FRIEND_ROOM.ctaLabel}
             </Button>
+          </Card>
+
+          <Card className="p-4">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle>현재 모드</CardTitle>
+              <Button size="sm" variant="secondary" onClick={() => navigate(ROUTES.profiles)}>
+                모드 변경
+              </Button>
+            </div>
+            <p className="mt-2 text-sm font-bold text-ink">
+              {`${modeConfig.emoji} ${modeConfig.name}`}
+            </p>
+            <p className="mt-0.5 text-xs text-ink-soft">
+              {`마감 괴물 · ${MONSTER_THEMES[modeConfig.monsterTheme].name}`}
+            </p>
           </Card>
 
           <Card className="p-4">

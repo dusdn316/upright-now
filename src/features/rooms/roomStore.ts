@@ -18,6 +18,13 @@ export type RoomConnection = 'connected' | 'reconnecting' | 'offline'
 export type MemberState = 'joining' | 'ready' | 'focusing' | 'resting' | 'away' | 'completed'
 
 export interface RoomMember {
+  /** 장착 아이템 (성공 이벤트와 함께 공유 허용 항목) */
+  jacketId?: string
+  backpackId?: string
+  cameraReady: boolean
+  calibrationReady: boolean
+  modelReady: boolean
+  userReady: boolean
   participantId: string
   nickname: string
   stage: number
@@ -27,6 +34,7 @@ export interface RoomMember {
 
 export interface ReactionFeedItem {
   id: string
+  participantId: string
   nickname: string
   reaction: ReactionKind
   at: number
@@ -49,6 +57,10 @@ interface RoomStoreState {
   bossHp: number
   bossMaxHp: number
   shield: number
+  /** 친구 회복 공격 연출 트리거 (수신 시 +1) */
+  friendAttackTick: number
+  /** 내 카메라 권한 확인 여부 (presence 로만 공유) */
+  myCameraReady: boolean
   /** 기린 싱크 연출 트리거 */
   syncFlashAt: number | null
   reactions: ReactionFeedItem[]
@@ -78,6 +90,8 @@ const initialState = {
   bossMaxHp: ROOM_BOSS_MAX_HP,
   shield: 0,
   syncFlashAt: null,
+  friendAttackTick: 0,
+  myCameraReady: false,
   reactions: [] as ReactionFeedItem[],
   lastFriendEvent: null,
 }

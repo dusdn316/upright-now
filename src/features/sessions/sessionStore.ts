@@ -5,7 +5,7 @@ import {
   type SessionTimeState,
 } from './sessionMachine'
 import { releaseSessionLocks } from './sessionLocks'
-import { DEFAULT_SESSION_LENGTH_ID, getSessionLength } from '@/constants/session'
+import { clampCustomFocusMin, clampCustomRestMin, DEFAULT_SESSION_LENGTH_ID, getSessionLength } from '@/constants/session'
 import { DEFAULT_PROFILE_ID } from '@/constants/profiles'
 import type { LearningProfileKind, PostureState, SessionMode } from '@/types'
 
@@ -26,6 +26,8 @@ interface SessionStoreState extends SessionTimeState {
     subject?: string
     goal?: string
     lengthId?: string
+    customFocusMin?: number
+    customRestMin?: number
     profileId?: LearningProfileKind
     mode?: SessionMode
   }) => void
@@ -61,16 +63,23 @@ const initialState = {
 export const useSessionStore = create<SessionStoreState>((set) => ({
   ...initialState,
 
-  configure: ({ subject, goal, lengthId, profileId, mode }) =>
+  configure: ({ subject, goal, lengthId, profileId, mode, customFocusMin, customRestMin }) =>
     set((s) => {
       const nextLengthId = lengthId ?? s.lengthId
-      const option = getSessionLength(nextLengthId)
+      // 직접 설정: 집중 5~120분(5분 단위) · 회복 휴식 0~30분
+      const custom = nextLengthId === 'custom'
+      const focusSec = custom
+        ? clampCustomFocusMin(customFocusMin ?? s.plannedMs / 60000) * 60
+        : getSessionLength(nextLengthId).focusSec
+      const restSec = custom
+        ? clampCustomRestMin(customRestMin ?? s.restSec / 60) * 60
+        : getSessionLength(nextLengthId).restSec
       return {
         subject: subject ?? s.subject,
         goal: goal ?? s.goal,
         lengthId: nextLengthId,
-        plannedMs: option.focusSec * 1000,
-        restSec: option.restSec,
+        plannedMs: focusSec * 1000,
+        restSec,
         profileId: profileId ?? s.profileId,
         mode: mode ?? s.mode,
       }

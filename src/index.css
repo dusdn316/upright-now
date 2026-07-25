@@ -216,6 +216,37 @@
     animation: un-boss-hit 320ms ease-in-out;
   }
 
+  .anim-boss-shake-key {
+    animation: un-boss-hit 320ms ease-in-out;
+  }
+
+  @keyframes un-damage-float {
+    0% { opacity: 0; transform: translate(-50%, 4px); }
+    30% { opacity: 1; transform: translate(-50%, -8px); }
+    100% { opacity: 0; transform: translate(-50%, -20px); }
+  }
+
+  .boss-damage-number {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    font-size: 13px;
+    font-weight: 800;
+    color: #ff6464;
+    text-shadow: 0 1px 0 #fff;
+    animation: un-damage-float 1100ms ease-out forwards;
+  }
+
+  @keyframes un-energy-beam {
+    0% { opacity: 0; transform: translateX(0) scale(0.7); }
+    30% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(120px) scale(1.1); }
+  }
+
+  .anim-energy-beam {
+    animation: un-energy-beam 700ms ease-in forwards;
+  }
+
   .anim-toast-in {
     animation: un-toast-in 220ms ease-out;
   }

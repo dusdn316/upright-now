@@ -32,6 +32,10 @@ import { useToast } from '@/app/providers/ToastProvider'
 import { closePip, openPip, registerAutoPip } from '@/features/pip/pipController'
 import { usePipStore } from '@/features/pip/pipStore'
 import { MiniPostureWidget } from '@/components/session/MiniPostureWidget'
+import { CoopArena } from '@/components/game/CoopArena'
+import { useAttackSequence } from '@/features/game/useAttackSequence'
+import { MONSTER_THEMES, useActiveModeConfig } from '@/features/modes/modeStore'
+import { DAMAGE } from '@/constants/game'
 
 /**
  * 언마운트 안전망 타이머 — StrictMode 의 즉시 재마운트에서는 다음 마운트가
@@ -178,9 +182,6 @@ export function Session() {
 
   // 친구 방 세션 — 공동 보스 표시 + 친구 성공 이벤트·기린 싱크 알림
   const roomPhase = useRoomStore((s) => s.phase)
-  const roomBossHp = useRoomStore((s) => s.bossHp)
-  const roomBossMax = useRoomStore((s) => s.bossMaxHp)
-  const roomShield = useRoomStore((s) => s.shield)
   const lastFriendEvent = useRoomStore((s) => s.lastFriendEvent)
   const syncFlashAt = useRoomStore((s) => s.syncFlashAt)
   const isRoomSession = roomPhase === 'running'
@@ -198,6 +199,13 @@ export function Session() {
       tone: 'success',
     })
   }, [syncFlashAt, push])
+
+  // 공격 연출 3.2초: 회복 0~0.7 → 에너지 0.7~1.4 → 피격 1.4~2.5 → 보상 2.5~3.2
+  const { energyActive, bossHitTick, rewardFlash } = useAttackSequence(game.attackTick)
+  const modeConfig = useActiveModeConfig()
+  const monsterName = isRoomSession
+    ? MONSTER_THEMES.komong.name
+    : MONSTER_THEMES[modeConfig.monsterTheme].name
 
   const remaining = remainingMs(session)
   const showAwayPrompt =
@@ -388,37 +396,61 @@ export function Session() {
           tone={isBad ? 'coral' : 'pink'}
           className="transition-colors duration-300"
         >
-          <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
-            <CharacterViewport
-              stage={stage}
-              postureState={snapshot.state}
-              visualState={visualIntent ?? 'idle'}
-              attackTick={game.attackTick}
-              size={270}
-            />
-            <div className="min-w-0 flex-1 text-center sm:text-left">
-              <PostureMessage state={snapshot.state} />
-              <p className="mt-2 text-sm text-ink-soft">
-                처음 등록한 개인 기준과 비교한 변화만 알려드려요.
-              </p>
-              <div className="mt-5 flex justify-center sm:justify-start">
-                <RecoveryCombo combo={game.combo} best={game.bestCombo} />
+          {isRoomSession ? (
+            /* 친구 방: [내 캐릭터] [공동 괴물 + HP] [친구 캐릭터] */
+            <CoopArena bossHitTick={bossHitTick} />
+          ) : (
+            <>
+              <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+                <div className="relative">
+                  <CharacterViewport
+                    stage={stage}
+                    postureState={snapshot.state}
+                    visualState={visualIntent ?? 'idle'}
+                    attackTick={game.attackTick}
+                    size={270}
+                  />
+                  {/* 0.7~1.4초: 에너지 이동 */}
+                  {energyActive && (
+                    <span
+                      aria-hidden="true"
+                      className="anim-energy-beam pointer-events-none absolute top-1/2 right-0 h-4 w-10 rounded-full bg-gradient-to-r from-yellow to-coral"
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 text-center sm:text-left">
+                  <PostureMessage state={snapshot.state} />
+                  <p className="mt-2 text-sm text-ink-soft">
+                    처음 등록한 개인 기준과 비교한 변화만 알려드려요.
+                  </p>
+                  <div className="mt-5 flex justify-center sm:justify-start">
+                    <RecoveryCombo combo={game.combo} best={game.bestCombo} />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div className="mt-4 rounded-2xl bg-surface/80 p-4">
-            <BossHealthBar
-              hp={isRoomSession ? roomBossHp : game.boss.hp}
-              maxHp={isRoomSession ? roomBossMax : game.boss.maxHp}
-              attackTick={game.attackTick}
-            />
-            {isRoomSession && (
-              <p className="mt-1 tabular text-xs text-ink-soft">
-                {`공동 보스 · 방어막 ${roomShield}`}
-              </p>
-            )}
-          </div>
+              <div className="mt-4 rounded-2xl bg-surface/80 p-4">
+                {/* 1.4~2.5초: 피격·흔들림·피해 숫자 (bossHitTick 지연 틱) */}
+                <BossHealthBar
+                  hp={game.boss.hp}
+                  maxHp={game.boss.maxHp}
+                  attackTick={bossHitTick}
+                  name={monsterName}
+                  damage={DAMAGE.recovery}
+                />
+              </div>
+            </>
+          )}
+
+          {/* 2.5~3.2초: 콤보·보상 표시 (조작을 막지 않는 한 줄) */}
+          {rewardFlash && (
+            <p
+              aria-live="polite"
+              className="anim-toast-in mt-2 text-center text-sm font-bold text-[#b8285a]"
+            >
+              {`콤보 ${game.combo} · +30 XP`}
+            </p>
+          )}
         </Card>
 
         {/* 오른쪽 — 남은 시간 · 이번 세션 · 제어 */}
@@ -503,7 +535,7 @@ export function Session() {
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" onClick={goStretch}>
-                  <Icon name="stretch" size={16} />2분 리셋 하기
+                  <Icon name="stretch" size={16} />회복 휴식 하기
                 </Button>
                 <Button
                   size="sm"

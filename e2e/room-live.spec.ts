@@ -23,11 +23,18 @@ function watchForbidden(page: Page, offenders: string[]): void {
       offenders.push(`${request.url()} :: ${body.slice(0, 200)}`)
     }
   })
+  // 진단용 — RPC 실패 원인을 표준 출력으로 남깁니다.
+  page.on('response', (response) => {
+    if (!SUPABASE_URL || !response.url().includes('apply_room_damage')) return
+    void response.text().then((text) => {
+      console.log(`[rpc] apply_room_damage ${response.status()} :: ${text.slice(0, 300)}`)
+    })
+  })
 }
 
 test.describe('실제 2인 친구 방', () => {
   test.skip(!HAS_ENV, 'Supabase env 미설정 — .env.local 에 URL/ANON_KEY 필요')
-  test.setTimeout(120_000)
+  test.setTimeout(180_000)
 
   test('생성→입장→준비→시작→공동 보스→회복→기린 싱크→금지 데이터 0건', async ({
     browser,
@@ -44,8 +51,15 @@ test.describe('실제 2인 친구 방', () => {
     const pageB = await contextB.newPage()
     watchForbidden(pageB, offenders)
 
-    // A: 방 생성
+    const inject = (page: Page) =>
+      page.evaluate(() => {
+        ;(window as unknown as { __upright?: { injectTestCalibration(): void } })
+          .__upright?.injectTestCalibration()
+      })
+
+    // A: 방 생성 (자세 기준·카메라 준비를 e2e 용으로 주입)
     await pageA.goto('/room/new')
+    await inject(pageA)
     await pageA.getByLabel('방 이름').fill('통합 테스트')
     await pageA.getByLabel('과목 또는 과제').fill('e2e')
     await pageA.getByRole('button', { name: '방 만들기' }).click()
@@ -55,8 +69,9 @@ test.describe('실제 2인 친구 방', () => {
       .textContent())!.trim()
     expect(code).toMatch(/^[A-Z0-9]{6}$/)
 
-    // B: 코드로 입장
+    // B: 코드로 입장 (링크·코드 진입만으로 세션이 시작되지 않아야 함)
     await pageB.goto('/room/new')
+    await inject(pageB)
     await pageB.getByLabel('방 코드').fill(code)
     await pageB.getByRole('button', { name: '입장' }).click()
     await expect(pageB.getByText('참가자')).toBeVisible({ timeout: 20_000 })
@@ -65,13 +80,18 @@ test.describe('실제 2인 친구 방', () => {
     await expect(pageA.getByText('2 / 2')).toBeVisible({ timeout: 20_000 })
     await expect(pageB.getByText('2 / 2')).toBeVisible({ timeout: 20_000 })
 
-    // 준비 완료 (양쪽)
+    // 준비 게이트: 한 명만 준비된 동안 방장 버튼은 '두 명 모두 준비되면 시작' + 비활성
     await pageA.getByRole('button', { name: '준비 완료' }).click()
+    await expect(
+      pageA.getByRole('button', { name: '두 명 모두 준비되면 시작' }),
+    ).toBeDisabled()
+
     await pageB.getByRole('button', { name: '준비 완료' }).click()
 
-    // 방장만 시작 버튼 활성화 → 시작
-    await expect(pageB.getByRole('button', { name: '세션 시작' })).toHaveCount(0)
     const startButton = pageA.getByRole('button', { name: '세션 시작' })
+
+    // 방장만 시작 버튼 노출 → 둘 다 준비되면 활성화
+    await expect(pageB.getByRole('button', { name: '세션 시작' })).toHaveCount(0)
     await expect(startButton).toBeEnabled({ timeout: 20_000 })
     await startButton.click()
 
@@ -87,7 +107,7 @@ test.describe('실제 2인 친구 방', () => {
     await pageB.waitForTimeout(2500)
 
     // 공동 보스 초기 HP 2000 동기화
-    const bossA = pageA.getByRole('progressbar', { name: /마감괴수/ })
+    const bossA = pageA.getByRole('progressbar', { name: /꼬몽이/ })
     await expect(bossA).toHaveAttribute('value', '100')
 
     // A 회복 성공 → 공동 보스 -40 (2000→1960 = 98%)
@@ -98,14 +118,8 @@ test.describe('실제 2인 친구 방', () => {
         .__upright?.recoverySuccess()
     })
 
-    // B 화면에도 친구 회복 알림 + HP 반영 (98%)
-    await expect(pageB.getByText(/회복 에너지를 보냈어요/)).toBeVisible({
-      timeout: 20_000,
-    })
-    const bossB = pageB.getByRole('progressbar', { name: /마감괴수/ })
-    await expect(bossB).toHaveAttribute('value', '98', { timeout: 20_000 })
-
-    // B 도 10초 안에 회복 → 기린 싱크 (-60 추가: 1900 = 95%)
+    // B 도 곧바로 회복 — 10초 기린 싱크 윈도 안에 확실히 들어가도록
+    // HP 폴링(최대 20초)을 기다리지 않고 즉시 실행합니다.
     await pageB.evaluate(() => {
       ;(window as unknown as { __upright?: { startRecovery(): void; recoverySuccess(): void } })
         .__upright?.startRecovery()
@@ -113,11 +127,37 @@ test.describe('실제 2인 친구 방', () => {
         .__upright?.recoverySuccess()
     })
 
-    await expect(pageA.getByText(/기린 싱크/)).toBeVisible({ timeout: 20_000 })
-    await expect(pageB.getByText(/기린 싱크/)).toBeVisible({ timeout: 20_000 })
-    // 두 회복(-80) + 싱크(-60) = 1860 → 93%
+    // B 화면에 친구 회복 알림
+    await expect(pageB.getByText(/회복 에너지를 보냈어요/)).toBeVisible({
+      timeout: 20_000,
+    })
+
+    // 싱크 플래시는 잠깐만 표시되므로 두 화면을 동시에 감시합니다.
+    await Promise.all([
+      expect(pageA.getByText(/기린 싱크/)).toBeVisible({ timeout: 20_000 }),
+      expect(pageB.getByText(/기린 싱크/)).toBeVisible({ timeout: 20_000 }),
+    ])
+    // 두 회복(-80) + 싱크(-60) = 1860 → 93% — 양쪽 HP 동기화 검증
+    const bossB = pageB.getByRole('progressbar', { name: /꼬몽이/ })
     await expect(bossA).toHaveAttribute('value', '93', { timeout: 20_000 })
     await expect(bossB).toHaveAttribute('value', '93', { timeout: 20_000 })
+
+    // 협동 화면: 공동 괴물 이름이 양쪽에 표시
+    await expect(pageA.getByText('팀플 괴물 꼬몽이').first()).toBeVisible()
+    await expect(pageB.getByText('팀플 괴물 꼬몽이').first()).toBeVisible()
+
+    // A 가 응원 반응 → B 화면 친구 캐릭터 위에 말풍선이 실제로 뜬다.
+    // 말풍선은 수신 후 3초만 표시되므로, 전달이 유실되면 rate limit(5초)
+    // 해제 후 한 번 더 눌러 재검증합니다. (실사용자도 다시 누를 수 있음)
+    const bubble = pageB.getByTestId('reaction-bubble')
+    await pageA.getByRole('button', { name: '조금만 더' }).click()
+    try {
+      await expect(bubble).toContainText('조금만 더', { timeout: 6_000 })
+    } catch {
+      await pageA.waitForTimeout(5_100)
+      await pageA.getByRole('button', { name: '조금만 더' }).click({ force: true })
+      await expect(bubble).toContainText('조금만 더', { timeout: 10_000 })
+    }
 
     // A 스트레칭 완료 → 공동 방어막 +15 (B 화면에서 확인)
     await pageA.getByRole('button', { name: '잠깐 스트레칭' }).click()

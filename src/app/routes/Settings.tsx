@@ -204,6 +204,23 @@ export function Settings() {
           </div>
         </Card>
 
+        {/* 모드 관리 */}
+        <Card>
+          <CardTitle>모드 관리</CardTitle>
+          <p className="mt-1 text-xs text-ink-soft">
+            도서관·내 공간·팀플과 내 모드(최대 3개)를 여기에서 관리해요. 모드를
+            바꿔도 XP·기록은 유지돼요.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="mt-3"
+            onClick={() => navigate(ROUTES.profiles)}
+          >
+            모드 관리 열기
+          </Button>
+        </Card>
+
         {/* 데이터 초기화 */}
         <Card className="border-coral/40">
           <CardTitle>전체 로컬 데이터 초기화</CardTitle>

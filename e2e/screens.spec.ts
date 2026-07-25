@@ -68,7 +68,7 @@ test.describe('1440x1000', () => {
   test('03~06 세션 상태와 결과', async ({ page }) => {
     await startSession(page)
 
-    const boss = page.getByRole('progressbar', { name: /마감괴수/ })
+    const boss = page.getByRole('progressbar', { name: /북몽이/ })
 
     // 03 good
     await dev(page, 'setPosture', 'good')

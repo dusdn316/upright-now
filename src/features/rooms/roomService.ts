@@ -13,6 +13,8 @@ import { useRoomStore, type MemberState } from './roomStore'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { xpToStage } from '@/features/progression/growth'
 import { useProgressionStore } from '@/features/progression/progressionStore'
+import { useCalibrationStore } from '@/features/calibration/calibrationStore'
+import { featureFlags } from '@/lib/feature-flags/flags'
 
 /**
  * 친구 방 서비스 — Supabase 익명 인증 · RPC · Presence · Broadcast.
@@ -30,12 +32,23 @@ let reconnectDeadline = 0
 const store = () => useRoomStore.getState()
 
 function myPresence(state: MemberState) {
+  const prog = useProgressionStore.getState()
+  const user = useUserStore.getState()
+  const cal = useCalibrationStore.getState()
+  const cameraOn = featureFlags.camera
   return {
     participantId: store().myId ?? '',
-    nickname: useUserStore.getState().nickname,
-    stage: xpToStage(useProgressionStore.getState().xp),
+    nickname: user.nickname,
+    stage: xpToStage(prog.xp),
     state,
     isHost: store().isHost,
+    jacketId: prog.equipped.jacketId,
+    backpackId: prog.equipped.backpackId,
+    // 준비 상태 — 자세 상태(good/bad 등)는 절대 넣지 않습니다.
+    cameraReady: !cameraOn || store().myCameraReady,
+    calibrationReady: !cameraOn || cal.profiles.length > 0,
+    modelReady: !cameraOn || cal.profiles.length > 0, // 기준 등록 = 모델 검증 완료
+    userReady: state === 'ready',
   }
 }
 
@@ -68,6 +81,7 @@ function handleEvent(event: RoomEvent): void {
   if (event.type === 'reaction_sent' && event.reaction) {
     s.addReaction({
       id: event.id,
+      participantId: event.participantId,
       nickname: event.nickname,
       reaction: event.reaction,
       at: Date.now(),
@@ -85,7 +99,10 @@ function handleEvent(event: RoomEvent): void {
 
   if (event.type === 'recovery_earned') {
     if (!isMine) {
-      s.patch({ lastFriendEvent: `${event.nickname}님이 회복 에너지를 보냈어요.` })
+      s.patch({
+        lastFriendEvent: `${event.nickname}님이 회복 에너지를 보냈어요.`,
+        friendAttackTick: s.friendAttackTick + 1,
+      })
     }
     const result = registerRecovery(giraffe, {
       eventId: event.id,
@@ -171,6 +188,12 @@ function subscribeChannel(roomId: string, code: string): void {
           stage: m.stage,
           state: m.state,
           isHost: m.isHost,
+          jacketId: m.jacketId,
+          backpackId: m.backpackId,
+          cameraReady: Boolean(m.cameraReady),
+          calibrationReady: Boolean(m.calibrationReady),
+          modelReady: Boolean(m.modelReady),
+          userReady: Boolean(m.userReady),
         }))
         store().patch({ members })
       })
@@ -213,6 +236,36 @@ function scheduleReconnect(roomId: string, code: string): void {
     void channel?.unsubscribe()
     subscribeChannel(roomId, code)
   }, 3000)
+}
+
+const REJOIN_KEY = 'upright-room-rejoin'
+
+function saveRejoin(): void {
+  const s = store()
+  try {
+    sessionStorage.setItem(
+      REJOIN_KEY,
+      JSON.stringify({ roomId: s.roomId, code: s.code, myId: s.myId, isHost: s.isHost }),
+    )
+  } catch { /* 저장 실패 무시 */ }
+}
+
+/** 새로고침 뒤 기존 참가자의 재접속 — join_room RPC 를 다시 부르지 않습니다. */
+export async function rejoinFromStorage(code: string): Promise<boolean> {
+  try {
+    const raw = sessionStorage.getItem(REJOIN_KEY)
+    if (!raw) return false
+    const saved = JSON.parse(raw) as { roomId: string; code: string; myId: string; isHost: boolean }
+    if (saved.code !== code.toUpperCase() || !saved.roomId) return false
+    const userId = await ensureAnonymousUser()
+    if (!userId || userId !== saved.myId) return false
+    giraffe = createGiraffeSync()
+    store().patch({ phase: 'connecting', roomId: saved.roomId, code: saved.code, myId: userId, isHost: saved.isHost })
+    subscribeChannel(saved.roomId, saved.code)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /* -------------------------------- 공개 API ------------------------------- */
@@ -260,6 +313,7 @@ export async function createRoom(input: {
     isHost: true,
   })
   subscribeChannel(data as string, code)
+  saveRejoin()
   return { ok: true, code }
 }
 
@@ -303,6 +357,7 @@ export async function joinRoom(
     isHost: false,
   })
   subscribeChannel(data as string, code.toUpperCase())
+  saveRejoin()
   return { ok: true }
 }
 
@@ -377,9 +432,14 @@ export async function reportSessionComplete(): Promise<void> {
   await applyDamageRpc(s.roomId, eventId, 'session_completed', ROOM_DAMAGE.sessionCompleted)
 }
 
+let lastReactionAt = 0
+
 export async function sendReaction(reaction: ReactionKind): Promise<void> {
   const s = store()
   if (!s.roomId || !s.myId) return
+  // 5초에 1회 — 자유 채팅 방지
+  if (Date.now() - lastReactionAt < 5000) return
+  lastReactionAt = Date.now()
   const event: RoomEvent = {
     id: crypto.randomUUID(),
     type: 'reaction_sent',

@@ -108,7 +108,7 @@ export function Stretch() {
     })
     if (outcome.applied) {
       push({
-        title: '방어막을 회복했어요! 잠깐의 리셋, 잘했어요.',
+        title: '방어막을 회복했어요! 잠깐의 회복 휴식, 잘했어요.',
         description: `+${outcome.xp} XP · +${outcome.points}P`,
         tone: 'success',
       })
@@ -149,11 +149,11 @@ export function Stretch() {
   return (
     <AppShell chrome="focus">
       <PageHeader
-        title="2분 리셋"
+        title="회복 휴식"
         description={
           origin === 'active-session'
             ? '세션 타이머를 잠시 멈췄어요. 끝나면 하던 세션을 이어서 진행해요.'
-            : '오래 앉아 있던 흐름을 짧게 리셋해요. 건너뛰어도 불이익이 없어요.'
+            : '오래 앉아 있던 흐름을 짧게 되돌리는 회복 휴식이에요. 건너뛰어도 불이익이 없어요.'
         }
         back={exitToOrigin}
       />

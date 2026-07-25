@@ -60,6 +60,7 @@ describe('QA Lab 숨김', () => {
     renderAt('/session/demo')
 
     expect(screen.queryByText('QA Lab · 상태 주입')).not.toBeInTheDocument()
-    expect(screen.getByText('마감괴수 D-DAY')).toBeInTheDocument()
+    // 기본(도서관) 모드의 마감 괴물이 표시된다
+    expect(screen.getByText('책더미 괴물 북몽이')).toBeInTheDocument()
   })
 })

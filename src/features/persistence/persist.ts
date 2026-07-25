@@ -46,7 +46,8 @@ export function installPersistence(): () => void {
   const unsubCal = useCalibrationStore.subscribe((s) =>
     guard(() =>
       saveLocal(STORAGE_KEYS.calibration, {
-        profile: s.profile,
+        profiles: s.profiles,
+        activeProfileId: s.activeProfileId,
         sensitivity: s.sensitivity,
       }),
     ),

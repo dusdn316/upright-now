@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AppShell, PageHeader } from '@/components/layout/AppShell'
 import { Button, Card, CardTitle, SegmentedControl, TextField } from '@/components/ui'
 import { ROOM_PRIVACY } from '@/constants/copy'
+import { clampCustomFocusMin } from '@/constants/session'
 import { ROUTES } from '@/constants/routes'
 import { featureFlags } from '@/lib/feature-flags/flags'
 import { createRoom, joinRoom } from '@/features/rooms/roomService'
@@ -26,6 +27,7 @@ export function RoomNew() {
   const [subject, setSubject] = useState('')
   const [goal, setGoal] = useState('')
   const [durationId, setDurationId] = useState('1500')
+  const [customMin, setCustomMin] = useState(25)
   const [joinCode, setJoinCode] = useState('')
 
   if (!featureFlags.friendRoom) {
@@ -45,7 +47,10 @@ export function RoomNew() {
       roomName,
       subject,
       goal,
-      durationSec: Number(durationId),
+      durationSec:
+        durationId === 'custom'
+          ? clampCustomFocusMin(customMin) * 60
+          : Number(durationId),
     })
     if (result.ok && result.code) navigate(ROUTES.room(result.code))
   }
@@ -93,11 +98,27 @@ export function RoomNew() {
               <p className="mb-2 text-sm font-semibold text-ink">세션 길이</p>
               <SegmentedControl
                 ariaLabel="세션 길이"
-                columns={3}
+                columns={4}
                 value={durationId}
                 onChange={setDurationId}
-                options={DURATIONS}
+                options={[...DURATIONS, { id: 'custom', label: '직접 설정', sublabel: '5~120분' }]}
               />
+              {durationId === 'custom' && (
+                <label className="mt-3 flex flex-col gap-1 text-sm">
+                  <span className="text-xs font-semibold text-ink-soft">
+                    집중 시간 (5~120분, 5분 단위 · 방장만 설정, 시작 후 잠김)
+                  </span>
+                  <input
+                    type="number"
+                    min={5}
+                    max={120}
+                    step={5}
+                    value={customMin}
+                    onChange={(e) => setCustomMin(Number(e.target.value))}
+                    className="h-10 w-32 rounded-xl border border-line bg-surface px-3"
+                  />
+                </label>
+              )}
             </div>
             <Button fullWidth disabled={busy} onClick={submitCreate}>
               {busy ? '만드는 중…' : '방 만들기'}

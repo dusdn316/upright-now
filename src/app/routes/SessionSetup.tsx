@@ -14,13 +14,23 @@ import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { useCharacterStage } from '@/features/progression/progressionStore'
 import { useGameStore } from '@/features/game/gameStore'
-import type { LearningProfileKind } from '@/types'
+import { useModeStore, useActiveModeConfig } from '@/features/modes/modeStore'
+import { useCalibrationStore } from '@/features/calibration/calibrationStore'
+import { useState } from 'react'
 
 /** S-06 세션 설정 — 기본값 25분 (docs/05, docs/13 §7) */
 export function SessionSetup() {
   const navigate = useNavigate()
   const stage = useCharacterStage()
-  const { nickname, profileId, setProfile, hasCalibration } = useUserStore()
+  const { nickname, hasCalibration } = useUserStore()
+  const modeConfig = useActiveModeConfig()
+  const customModes = useModeStore((s) => s.customModes)
+  const setActiveMode = useModeStore((s) => s.setActiveMode)
+  const calProfiles = useCalibrationStore((s) => s.profiles)
+  const activeProfileId = useCalibrationStore((s) => s.activeProfileId)
+  const selectProfile = useCalibrationStore((s) => s.selectProfile)
+  const [customFocus, setCustomFocus] = useState(25)
+  const [customRest, setCustomRest] = useState(5)
   const { subject, goal, lengthId, mode, configure, start } = useSessionStore()
   const resetGame = useGameStore((s) => s.reset)
   const { push } = useToast()
@@ -81,12 +91,27 @@ export function SessionSetup() {
                 columns={2}
                 value={lengthId}
                 onChange={(id) => configure({ lengthId: id })}
-                options={SESSION_LENGTHS.map((o) => ({
-                  id: o.id,
-                  label: o.label,
-                  sublabel: o.restLabel,
-                }))}
+                options={[
+                  ...SESSION_LENGTHS.map((o) => ({ id: o.id, label: o.label, sublabel: o.restLabel })),
+                  { id: 'custom', label: '직접 설정', sublabel: '5~120분' },
+                ]}
               />
+              {lengthId === 'custom' && (
+                <div className="mt-3 flex flex-wrap items-end gap-3 text-sm">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold text-ink-soft">집중 (5~120분, 5분 단위)</span>
+                    <input type="number" min={5} max={120} step={5} value={customFocus}
+                      onChange={(e) => { const v = Number(e.target.value); setCustomFocus(v); configure({ lengthId: 'custom', customFocusMin: v, customRestMin: customRest }) }}
+                      className="h-10 w-28 rounded-xl border border-line bg-surface px-3" />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold text-ink-soft">회복 휴식 (0~30분)</span>
+                    <input type="number" min={0} max={30} step={5} value={customRest}
+                      onChange={(e) => { const v = Number(e.target.value); setCustomRest(v); configure({ lengthId: 'custom', customFocusMin: customFocus, customRestMin: v }) }}
+                      className="h-10 w-28 rounded-xl border border-line bg-surface px-3" />
+                  </label>
+                </div>
+              )}
             </div>
           </Card>
 
@@ -94,19 +119,22 @@ export function SessionSetup() {
             <CardTitle>학습 프로필</CardTitle>
             <div className="mt-4">
               <SegmentedControl
-                ariaLabel="학습 프로필"
+                ariaLabel="학습 모드"
                 columns={3}
-                value={profileId}
-                onChange={(id) => {
-                  setProfile(id as LearningProfileKind)
-                  configure({ profileId: id as LearningProfileKind })
-                }}
-                options={LEARNING_PROFILES.map((p) => ({
-                  id: p.id,
-                  label: p.name,
-                  sublabel: p.sound,
-                }))}
+                value={modeConfig.id}
+                onChange={(id) => setActiveMode(id)}
+                options={[
+                  ...LEARNING_PROFILES.map((p) => ({ id: p.id, label: p.name, sublabel: p.sound })),
+                  ...customModes.map((m) => ({ id: m.id, label: m.emoji + ' ' + m.name, sublabel: '내 모드' })),
+                ]}
               />
+              <p className="mt-2 text-xs text-ink-soft">
+                모드 관리는{' '}
+                <button type="button" className="font-bold underline" onClick={() => navigate(ROUTES.profiles)}>
+                  모드 화면
+                </button>
+                에서 할 수 있어요. 모드를 바꿔도 XP·기록은 유지돼요.
+              </p>
             </div>
           </Card>
 
@@ -150,11 +178,25 @@ export function SessionSetup() {
           <Card>
             <CardTitle>준비 상태</CardTitle>
             <ul className="mt-3 flex flex-col gap-2 text-sm">
-              <li className="flex items-center justify-between">
-                <span className="text-ink-soft">연결된 장소 기준</span>
-                <Badge tone={hasCalibration ? 'green' : 'muted'}>
-                  {hasCalibration ? '등록됨' : '등록 전'}
-                </Badge>
+              <li className="flex flex-col gap-1">
+                <span className="text-ink-soft">사용할 자세 기준</span>
+                {calProfiles.length > 0 ? (
+                  <select
+                    aria-label="자세 기준 선택"
+                    value={activeProfileId ?? ''}
+                    onChange={(e) => selectProfile(e.target.value)}
+                    className="h-9 rounded-xl border border-line bg-surface px-2 text-sm"
+                  >
+                    {calProfiles.map((cp) => (
+                      <option key={cp.id} value={cp.id}>{cp.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <Badge tone={hasCalibration ? 'green' : 'muted'}>등록 전</Badge>
+                )}
+                <button type="button" className="self-start text-xs font-bold text-blue underline" onClick={() => navigate(ROUTES.calibration)}>
+                  새 기준 등록
+                </button>
               </li>
               <li className="flex items-center justify-between">
                 <span className="text-ink-soft">소리</span>
@@ -171,7 +213,7 @@ export function SessionSetup() {
 
           <Button size="lg" fullWidth onClick={startSession}>
             <Icon name="play" size={18} />
-            {`${SESSION_LENGTHS.find((o) => o.id === lengthId)?.label ?? '25분 집중'} 시작`}
+            {lengthId === 'custom' ? `${customFocus}분 집중 시작` : `${SESSION_LENGTHS.find((o) => o.id === lengthId)?.label ?? '25분 집중'} 시작`}
           </Button>
         </div>
       </div>

@@ -1,11 +1,14 @@
 import { create } from 'zustand'
-import { loadLocal, STORAGE_KEYS } from '@/lib/storage/local'
+import { loadLocal, saveLocal, STORAGE_KEYS } from '@/lib/storage/local'
 import type { FeatureKey } from '@/features/posture-engine/features'
 import type { Sensitivity } from '@/constants/posture'
 
 /**
- * 개인 자세 기준 요약 v2 — 특징별 median + MAD + 유효 표본 수.
- * 평균만 저장하지 않습니다. 원본 프레임·랜드마크 시계열은 저장하지 않습니다.
+ * 개인 자세 기준 — 여러 프로필 저장 (집 책상·학교 도서관·팀플 회의실 …).
+ *
+ * 각 프로필: 특징별 median + MAD + 표본 수 요약만. (평균만 저장 금지)
+ * 원본 영상·프레임·랜드마크 좌표는 저장하지 않습니다.
+ * 판정 엔진(useLiveClassifier)은 기존처럼 `profile`(활성 프로필)만 읽습니다.
  */
 export interface FeatureStat {
   median: number
@@ -18,7 +21,6 @@ export interface CalibrationProfile {
   id: string
   name: string
   createdAt: number
-  /** 유효 표본이 충분했던 특징만 담김 */
   features: Partial<Record<FeatureKey, FeatureStat>>
   shoulderWidthMedian: number
   /** 카메라 식별용 안전한 해시 (원본 deviceId 아님) */
@@ -30,33 +32,114 @@ export interface CalibrationProfile {
 }
 
 interface CalibrationStoreState {
+  profiles: CalibrationProfile[]
+  activeProfileId: string | null
+  /** 활성 프로필 파생값 — 판정 엔진 호환용 (직접 쓰지 말 것) */
   profile: CalibrationProfile | null
   sensitivity: Sensitivity
+
+  /** 새 기준 저장 + 활성화 */
+  addProfile: (profile: CalibrationProfile) => void
+  /** @deprecated addProfile 별칭 — 기존 호출부 호환 */
   setProfile: (profile: CalibrationProfile) => void
+  selectProfile: (id: string) => void
+  renameProfile: (id: string, name: string) => void
+  removeProfile: (id: string) => void
   setSensitivity: (value: Sensitivity) => void
   clear: () => void
 }
 
 interface PersistShape {
-  profile: CalibrationProfile | null
+  profiles: CalibrationProfile[]
+  activeProfileId: string | null
   sensitivity: Sensitivity
 }
 
-const loaded = loadLocal<PersistShape>(STORAGE_KEYS.calibration, {
+/** 구(단일 프로필) 저장형과 신형을 모두 읽습니다. */
+interface LegacyShape {
+  profile?: CalibrationProfile | null
+  profiles?: CalibrationProfile[]
+  activeProfileId?: string | null
+  sensitivity: Sensitivity
+}
+
+const loaded = loadLocal<LegacyShape>(STORAGE_KEYS.calibration, {
   profile: null,
   sensitivity: 'default',
 })
 
-// v2 스키마가 아닌 프로필은 사용하지 않습니다. (마이그레이션이 이미 걸러줌)
-const validProfile =
-  loaded.profile && loaded.profile.version === 2 ? loaded.profile : null
+const migratedProfiles: CalibrationProfile[] = (
+  loaded.profiles ?? (loaded.profile ? [loaded.profile] : [])
+).filter((p) => p && p.version === 2)
 
-export const useCalibrationStore = create<CalibrationStoreState>((set) => ({
-  profile: validProfile,
-  sensitivity: loaded.sensitivity,
-  setProfile: (profile) => set({ profile }),
-  setSensitivity: (sensitivity) => set({ sensitivity }),
-  clear: () => set({ profile: null }),
+const migratedActiveId =
+  loaded.activeProfileId &&
+  migratedProfiles.some((p) => p.id === loaded.activeProfileId)
+    ? loaded.activeProfileId
+    : (migratedProfiles[0]?.id ?? null)
+
+function activeOf(
+  profiles: CalibrationProfile[],
+  id: string | null,
+): CalibrationProfile | null {
+  return profiles.find((p) => p.id === id) ?? null
+}
+
+function persist(s: PersistShape): void {
+  saveLocal(STORAGE_KEYS.calibration, s)
+}
+
+export const useCalibrationStore = create<CalibrationStoreState>((set, get) => ({
+  profiles: migratedProfiles,
+  activeProfileId: migratedActiveId,
+  profile: activeOf(migratedProfiles, migratedActiveId),
+  sensitivity: loaded.sensitivity ?? 'default',
+
+  addProfile: (profile) => {
+    const s = get()
+    const profiles = [...s.profiles.filter((p) => p.id !== profile.id), profile]
+    persist({ profiles, activeProfileId: profile.id, sensitivity: s.sensitivity })
+    set({ profiles, activeProfileId: profile.id, profile })
+  },
+
+  setProfile: (profile) => get().addProfile(profile),
+
+  selectProfile: (id) => {
+    const s = get()
+    const profile = activeOf(s.profiles, id)
+    if (!profile) return
+    persist({ profiles: s.profiles, activeProfileId: id, sensitivity: s.sensitivity })
+    set({ activeProfileId: id, profile })
+  },
+
+  renameProfile: (id, name) => {
+    const s = get()
+    const profiles = s.profiles.map((p) =>
+      p.id === id ? { ...p, name: name.slice(0, 20) || p.name } : p,
+    )
+    persist({ profiles, activeProfileId: s.activeProfileId, sensitivity: s.sensitivity })
+    set({ profiles, profile: activeOf(profiles, s.activeProfileId) })
+  },
+
+  removeProfile: (id) => {
+    const s = get()
+    const profiles = s.profiles.filter((p) => p.id !== id)
+    const activeProfileId =
+      s.activeProfileId === id ? (profiles[0]?.id ?? null) : s.activeProfileId
+    persist({ profiles, activeProfileId, sensitivity: s.sensitivity })
+    set({ profiles, activeProfileId, profile: activeOf(profiles, activeProfileId) })
+  },
+
+  setSensitivity: (sensitivity) => {
+    const s = get()
+    persist({ profiles: s.profiles, activeProfileId: s.activeProfileId, sensitivity })
+    set({ sensitivity })
+  },
+
+  clear: () => {
+    persist({ profiles: [], activeProfileId: null, sensitivity: get().sensitivity })
+    set({ profiles: [], activeProfileId: null, profile: null })
+  },
 }))
 
 /** deviceId 를 저장 가능한 짧은 해시로 바꿉니다. (djb2, 복원 불가) */

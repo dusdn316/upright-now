@@ -15,13 +15,14 @@ export function PipWidget({ onClose }: { onClose: () => void }) {
   const snapshot = usePostureStore((s) => s.snapshot)
   const session = useSessionStore()
   const combo = useGameStore((s) => s.combo)
+  const attackTick = useGameStore((s) => s.attackTick)
 
   const copy = POSTURE_COPY[snapshot.state]
   const remaining = remainingMs(session)
 
   return (
     <div className="flex h-full flex-col items-center gap-2 bg-canvas p-3 text-center">
-      <CharacterViewport stage={stage} postureState={snapshot.state} size={120} />
+      <CharacterViewport stage={stage} postureState={snapshot.state} size={120} attackTick={attackTick} attackDurationMs={1500} />
 
       <p className="tabular text-3xl leading-none font-bold text-ink">
         {formatClock(remaining)}

@@ -99,3 +99,32 @@ npm run lint / typecheck / test / test:e2e / build
 2. 친구 방 실환경 노트: presence 메타는 participantId 로 dedupe(최신 우선), 기린 싱크 피해는 두 회복 uuid 의 XOR 파생 id 사용(원본 id 재사용 시 dedup 충돌), realtime.messages RLS 정책이 없어 표준(비 private) 채널 사용 — 정책 추가 시 private 전환 가능
 3. Lv.2/4/5/6 상태 에셋 · 의상 이미지 레이어 · 모션 WebM 미보유
 4. recovery_started 토스트 카피("돌아오는 중이에요") 검토
+
+## fix/core-session-flow — 모드·캘리브레이션·협동 흐름 (2026-07-26)
+
+### 확정: 모드별 마감 괴물
+- 도서관 모드 = 책더미 괴물 **북몽이** (`bookmong`)
+- 내 공간 모드 = 늘어짐 괴물 **늘몽이** (`neulmong`)
+- 팀플 모드 = 팀플 괴물 **꼬몽이** (`komong`) — 친구 방 세션은 항상 꼬몽이
+- 매핑은 `src/features/modes/modeStore.ts` 의 `MONSTER_THEMES` 가 단일 출처.
+- 모드(기본 3종 + 내 모드 최대 3개)는 소리 기본값·연출 강도·스트레칭 추천·
+  친구 기능·괴물 테마만 바꾼다. **자세 판정 임계값·XP·기록·성장은 모드와
+  무관하며, 모드 변경 시 절대 초기화되지 않는다.**
+
+### 보류: 캠퍼스 테마 (별도 스프린트)
+다음 항목은 이번 범위에서 구현하지 않고 별도 스프린트로 미룬다:
+학교 선택, 학교 상징색, 프로필 배지, 과잠·백팩 아이템, 시험기간·도서관 배경,
+결과 공유 카드. 구현하더라도 **캠퍼스 테마는 자세 판정·보상·난이도를
+절대 바꾸지 않는다** (표시 전용).
+
+### 캘리브레이션 v3 완료 조건 (전부 충족해야 완료)
+카메라·프레이밍 체크 1.5초 → 실시간 벽시계 5.0초 안정 + 유효 표본 ≥40 +
+1초 버킷 5칸 각각에 유효 표본 ≥1. 빠른 프레임 40장이 5초 전에 모여도
+완료되지 않는다 (`src/features/calibration/collect.spec.ts` 로 증명).
+프로필은 다중 저장(`profiles[]` + `activeProfileId`)이며 요약 통계만 담고
+원본 좌표·프레임은 저장하지 않는다.
+
+### Supabase 수동 마이그레이션 필요 (라이브 DB)
+`supabase/schema.sql` 하단 V1.2 블록 — rooms.duration_seconds CHECK 를
+IN-목록에서 `between 180 and 7200` 범위로 변경. SQL Editor 에서 직접 실행
+전까지 라이브 방은 15/25/50분 외 사용자 지정 길이를 거부한다.
