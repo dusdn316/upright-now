@@ -48,6 +48,7 @@ export function SessionSetup() {
       <PageHeader
         title="이번 25분에 무엇을 끝내고 싶나요?"
         description="목표는 나중에 결과 화면에서 직접 진행도를 남길 수 있어요."
+        back={ROUTES.home}
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">

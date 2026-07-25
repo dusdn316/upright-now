@@ -54,6 +54,7 @@ export function Result() {
   return (
     <AppShell chrome="focus">
       <PageHeader
+        back={() => navigate(ROUTES.home)}
         title={
           completed
             ? `오늘의 ${Math.round(session.plannedMs / 60000)}분을 마쳤어요.`

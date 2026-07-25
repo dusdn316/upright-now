@@ -150,6 +150,7 @@ export function Calibration() {
         <PageHeader
           title="자세 기준 등록"
           description="얼굴과 양쪽 어깨가 보이도록 편안하게 앉은 자세를 5초 동안 등록해요."
+          back={ROUTES.camera}
         />
         <Card tone="yellow">
           <p className="text-sm font-bold text-ink">
@@ -168,6 +169,7 @@ export function Calibration() {
       <PageHeader
         title="얼굴과 양쪽 어깨가 보이도록 편안하게 앉아 주세요"
         description="이 환경의 편안한 자세를 5초 동안 기준으로 등록해요. 영상은 저장하지 않아요."
+        back={ROUTES.camera}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">

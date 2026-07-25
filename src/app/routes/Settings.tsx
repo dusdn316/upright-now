@@ -58,6 +58,7 @@ export function Settings() {
       <PageHeader
         title="설정"
         description="감지 민감도, 소리, 카메라, 개인 자세 기준과 데이터를 관리해요."
+        back={ROUTES.home}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">

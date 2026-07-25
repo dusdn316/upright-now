@@ -83,6 +83,11 @@ export function Room() {
       <PageHeader
         title={room.roomName || '친구 방'}
         description={ROOM_PRIVACY}
+        back={() => {
+          // 뒤로가기도 "나가기"와 같은 정리 경로를 타야 presence 가 남지 않습니다.
+          void leaveRoom()
+          navigate(ROUTES.roomNew)
+        }}
         action={
           room.connection !== 'connected' ? (
             <Badge tone="coral">

@@ -1,6 +1,7 @@
 import { AppShell, PageHeader } from '@/components/layout/AppShell'
 import { AttendanceCalendar } from '@/components/dashboard/AttendanceCalendar'
 import { Card, CardTitle, EmptyState, StatTile } from '@/components/ui'
+import { ROUTES } from '@/constants/routes'
 import { formatDuration } from '@/features/sessions/sessionMachine'
 import { useSessionHistoryStore } from '@/features/sessions/sessionHistoryStore'
 import { useProgressionStore } from '@/features/progression/progressionStore'
@@ -22,6 +23,7 @@ export function History() {
       <PageHeader
         title="기록"
         description="완료한 세션과 주간 출석을 확인해요. 자세 점수가 아니라 회복·감지 가능 시간을 보여줘요."
+        back={ROUTES.home}
       />
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">

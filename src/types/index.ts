@@ -56,6 +56,8 @@ export interface SessionConfig {
 
 export interface SessionSummary {
   id: string
+  /** 원본 세션 id — 같은 세션이 두 번 저장돼도 집계는 1회만 (구버전 기록엔 없음) */
+  sessionId?: string
   startedAt: number
   endedAt: number
   status: 'completed' | 'aborted'

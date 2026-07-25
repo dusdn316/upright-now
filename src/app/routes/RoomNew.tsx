@@ -61,6 +61,7 @@ export function RoomNew() {
       <PageHeader
         title="친구와 함께 25분을 시작해 볼까요?"
         description={ROOM_PRIVACY}
+        back={ROUTES.home}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AppShell, PageHeader } from '@/components/layout/AppShell'
 import { Button, Card, Progress } from '@/components/ui'
 import { StretchFigure } from '@/components/stretch/StretchFigure'
@@ -16,11 +16,36 @@ import type { StretchRoutine } from '@/types'
 
 let attemptSeq = 0
 
+/**
+ * 스트레칭 출발 경로 — 어디서 왔는지에 따라 복귀 목적지가 달라집니다.
+ * - active-session: 세션 중 휴식. 같은 세션으로 돌아가고 finalize 하지 않습니다.
+ * - result: 이미 끝난 세션의 휴식. 결과 화면으로 돌아갑니다.
+ * - standalone: 메뉴에서 독립 진입. 세션을 만들지도 끝내지도 않습니다.
+ */
+type StretchOrigin = 'active-session' | 'result' | 'standalone'
+
+interface StretchLocationState {
+  origin?: 'active-session' | 'result'
+  sessionId?: string
+}
+
 /** S-11 스트레칭 — 모드별 가중 랜덤, 직전 동작 제외, 건너뛰기 불이익 없음 */
 export function Stretch() {
   const navigate = useNavigate()
+  const location = useLocation()
   const profileId = useUserStore((s) => s.profileId)
   const { push } = useToast()
+
+  const locationState = (location.state ?? {}) as StretchLocationState
+  const sessionStatus = useSessionStore((s) => s.status)
+  // 새로고침으로 state 가 사라지면(세션 스토어도 함께 초기화됨) standalone 취급.
+  const origin: StretchOrigin =
+    locationState.origin === 'active-session' && sessionStatus === 'resting'
+      ? 'active-session'
+      : locationState.origin === 'result'
+        ? 'result'
+        : 'standalone'
+  const originSessionId = locationState.sessionId
   const prevIdRef = useRef<string | undefined>(undefined)
   /**
    * 완료 보상 이벤트 id — 시도(동작 시작)마다 한 번만 만들어,
@@ -96,11 +121,41 @@ export function Stretch() {
 
   const progress = 1 - remaining / routine.durationSec
 
+  // 출발 경로별 복귀 — 스트레칭은 어떤 경우에도 세션을 끝내지 않습니다.
+  const exitToOrigin = () => {
+    if (origin === 'active-session') {
+      const sessionId =
+        originSessionId ?? useSessionStore.getState().sessionId
+      useSessionStore.getState().endRest()
+      navigate(ROUTES.session(sessionId))
+      return
+    }
+    if (origin === 'result') {
+      navigate(
+        ROUTES.result(originSessionId ?? useSessionStore.getState().sessionId),
+      )
+      return
+    }
+    navigate(ROUTES.home)
+  }
+
+  const exitLabel =
+    origin === 'active-session'
+      ? '세션으로 돌아가기'
+      : origin === 'result'
+        ? '결과로 돌아가기'
+        : '홈으로'
+
   return (
     <AppShell chrome="focus">
       <PageHeader
         title="2분 리셋"
-        description="오래 앉아 있던 흐름을 짧게 리셋해요. 건너뛰어도 불이익이 없어요."
+        description={
+          origin === 'active-session'
+            ? '세션 타이머를 잠시 멈췄어요. 끝나면 하던 세션을 이어서 진행해요.'
+            : '오래 앉아 있던 흐름을 짧게 리셋해요. 건너뛰어도 불이익이 없어요.'
+        }
+        back={exitToOrigin}
       />
 
       <div className="mx-auto max-w-xl">
@@ -141,15 +196,15 @@ export function Stretch() {
             )}
             {done && (
               <Button size="sm" variant="secondary" onClick={pickAnother}>
-                한 동작 더
+                다른 동작 보기
               </Button>
             )}
             <Button
               size="sm"
-              variant="ghost"
-              onClick={() => navigate(ROUTES.result())}
+              variant={done ? 'primary' : 'ghost'}
+              onClick={exitToOrigin}
             >
-              {done ? '결과 보기' : '건너뛰기'}
+              {done ? exitLabel : '건너뛰기'}
             </Button>
           </div>
         </Card>

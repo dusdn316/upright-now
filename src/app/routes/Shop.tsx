@@ -51,6 +51,7 @@ export function Shop() {
         <PageHeader
           title="상점"
           description="모은 잎사귀로 대학 컬러 과잠과 캠퍼스 백팩을 고를 수 있어요."
+          back={ROUTES.home}
         />
         <EmptyState
           title="첫 세션을 완료하면 상점이 열려요"
@@ -143,6 +144,7 @@ export function Shop() {
       <PageHeader
         title="상점"
         description="모은 잎사귀로 캠퍼스 스타일을 골라보세요."
+        back={ROUTES.home}
         action={
           <Badge tone="yellow" className="text-sm">
             <Icon name="leaf" size={14} />

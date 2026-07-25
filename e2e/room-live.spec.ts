@@ -120,7 +120,7 @@ test.describe('실제 2인 친구 방', () => {
     await expect(bossB).toHaveAttribute('value', '93', { timeout: 20_000 })
 
     // A 스트레칭 완료 → 공동 방어막 +15 (B 화면에서 확인)
-    await pageA.getByRole('button', { name: '스트레칭 예약' }).click()
+    await pageA.getByRole('button', { name: '잠깐 스트레칭' }).click()
     await pageA.getByRole('button', { name: '완료' }).click()
     await expect(pageB.getByText(/방어막 15/)).toBeVisible({ timeout: 20_000 })
 

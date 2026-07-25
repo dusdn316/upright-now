@@ -42,6 +42,7 @@ export function CameraIntro() {
       <PageHeader
         title="자세를 살펴볼 수 있게 카메라를 연결해 주세요"
         description="카메라는 자세 변화만 이 기기 안에서 살펴봐요. 영상과 사진은 저장하거나 외부로 보내지 않아요."
+        back={ROUTES.profiles}
       />
 
       <div className="grid gap-4 md:grid-cols-3">

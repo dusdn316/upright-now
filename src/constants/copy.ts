@@ -74,7 +74,10 @@ export const RECOVERY_COPY = {
 
 export const QUALITY_COPY = {
   good: '측정 상태 좋음',
-  limited: '측정 상태 불안정',
+  // 노트북 웹캠은 엉덩이가 화면 밖인 것이 정상입니다. "불안정"이라고 쓰면
+  // 편안히 앉아 있어도 항상 문제가 있는 것처럼 읽혀 limited 는
+  // "측정은 계속되고 있다"가 전달되도록 씁니다.
+  limited: '일부만 보여요 · 측정 계속',
   unavailable: '측정 불가',
 } as const
 

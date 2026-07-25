@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { CharacterViewport } from '@/components/character/CharacterViewport'
@@ -31,6 +32,12 @@ import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useDemoStore } from '@/features/demo/demoMode'
 import { formatDuration } from '@/features/sessions/sessionMachine'
+import { useSessionHistoryStore } from '@/features/sessions/sessionHistoryStore'
+import {
+  formatFocusClock,
+  selectTodayFocus,
+  selectTotalFocusMs,
+} from '@/features/sessions/todayFocus'
 
 /** S-01 랜딩·대시보드 — docs/05_SCREEN_SPEC.md */
 export function LandingDashboard() {
@@ -43,6 +50,11 @@ export function LandingDashboard() {
   const { lengthId, configure, status } = useSessionStore()
   const isMonitoring = status === 'running'
   const { push } = useToast()
+
+  // 세션 요약 저장(finalizeSession) 직후 zustand 구독으로 즉시 갱신됩니다.
+  const summaries = useSessionHistoryStore((s) => s.summaries)
+  const todayFocus = useMemo(() => selectTodayFocus(summaries), [summaries])
+  const totalFocusMs = useMemo(() => selectTotalFocusMs(summaries), [summaries])
 
   const isFirstVisit = !hasOnboarded
 
@@ -57,7 +69,11 @@ export function LandingDashboard() {
               <CardTitle>오늘의 기록</CardTitle>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <StatTile label="집중" value="0:00" tone="surface" />
+              <StatTile
+                label="집중"
+                value={formatFocusClock(todayFocus.focusedMs)}
+                tone="surface"
+              />
               <StatTile label="콤보" value={String(combo)} unit="회" tone="surface" />
               <StatTile label="포인트" value={String(points)} unit="P" tone="surface" />
             </div>
@@ -243,7 +259,7 @@ export function LandingDashboard() {
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-ink">최근 세션</h2>
         </div>
-        {completedSessions === 0 ? (
+        {completedSessions === 0 && summaries.length === 0 ? (
           <EmptyState
             title="아직 기록이 없어요"
             description="첫 세션을 마치면 여기에 회복 콤보와 감지 가능 시간이 쌓여요."
@@ -256,7 +272,7 @@ export function LandingDashboard() {
         ) : (
           <Card className="p-4">
             <p className="text-sm text-ink-soft">
-              {`완료한 세션 ${completedSessions}회 · 누적 ${formatDuration(completedSessions * 1500000)}`}
+              {`완료한 세션 ${completedSessions}회 · 누적 집중 ${formatDuration(totalFocusMs)}`}
             </p>
           </Card>
         )}

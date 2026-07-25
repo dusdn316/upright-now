@@ -75,8 +75,9 @@ describe('캘리브레이션 v2 (긴급 안정화 D)', () => {
 
   it('얼굴이 크게 돌아간 프레임은 rotated 로 제외한다', () => {
     let { state } = feed(createCollectState(), 0, 1500)
+    // YAW_SEVERE 0.9 초과 (0.05 / (0.09/2) ≈ 1.11)
     const rotated = analyzeLandmarks(
-      makeLandmarks({ move: { nose: { dx: 0.04 } } }),
+      makeLandmarks({ move: { nose: { dx: 0.05 } } }),
     )
     const step = collectStep(state, { analysis: rotated, now: 1600 })
     expect(step.quality).toBe('rotated')

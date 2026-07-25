@@ -11,6 +11,8 @@ import type { LearningProfileKind, PostureState, SessionMode } from '@/types'
 
 interface SessionStoreState extends SessionTimeState {
   sessionId: string
+  /** start() 를 누른 시각 (epoch ms). 요약의 날짜 집계에 씁니다. */
+  startedAt: number
   subject: string
   goal: string
   lengthId: string
@@ -31,6 +33,9 @@ interface SessionStoreState extends SessionTimeState {
   tick: (deltaMs: number, posture: PostureState) => void
   pause: () => void
   resume: () => void
+  /** 세션 중 스트레칭 — 타이머·자세 판정을 멈추고 같은 세션으로 돌아옵니다. */
+  beginRest: () => void
+  endRest: () => void
   finish: (status: 'completed' | 'aborted') => void
   /** QA 데모용 — 남은 시간을 건너뛰고 정상 완료 상태로 만듭니다. */
   completeNow: () => void
@@ -43,6 +48,7 @@ const defaultLength = getSessionLength(DEFAULT_SESSION_LENGTH_ID)
 const initialState = {
   ...createSessionTimeState(defaultLength.focusSec * 1000),
   sessionId: 'demo',
+  startedAt: 0,
   subject: '',
   goal: '',
   lengthId: DEFAULT_SESSION_LENGTH_ID,
@@ -76,6 +82,7 @@ export const useSessionStore = create<SessionStoreState>((set) => ({
     set((s) => ({
       ...createSessionTimeState(s.plannedMs),
       sessionId,
+      startedAt: Date.now(),
       status: 'running',
     }))
   },
@@ -86,6 +93,15 @@ export const useSessionStore = create<SessionStoreState>((set) => ({
   pause: () => set((s) => (s.status === 'running' ? { status: 'paused' } : s)),
 
   resume: () => set((s) => (s.status === 'paused' ? { status: 'running' } : s)),
+
+  beginRest: () =>
+    set((s) =>
+      s.status === 'running' || s.status === 'paused'
+        ? { status: 'resting' }
+        : s,
+    ),
+
+  endRest: () => set((s) => (s.status === 'resting' ? { status: 'running' } : s)),
 
   finish: (status) => set({ status }),
 

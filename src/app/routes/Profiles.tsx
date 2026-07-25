@@ -22,6 +22,7 @@ export function Profiles() {
       <PageHeader
         title="오늘은 어디에서 공부하나요?"
         description="장소마다 소리·화면 효과·스트레칭 추천이 달라져요. 나중에 설정에서 바꿀 수 있어요."
+        back={ROUTES.onboardingName}
       />
 
       <div className="grid gap-4 md:grid-cols-3">

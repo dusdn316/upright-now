@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { AppShell } from '@/components/layout/AppShell'
+import { AppShell, BackButton } from '@/components/layout/AppShell'
 import { CharacterViewport } from '@/components/character/CharacterViewport'
 import { BossHealthBar } from '@/components/game/BossHealthBar'
 import {
@@ -20,6 +20,7 @@ import { useCharacterVisualStore } from '@/features/posture-engine/characterVisu
 import { usePostureTicker } from '@/features/posture-engine/usePostureTicker'
 import { useLiveClassifier } from '@/features/posture-engine/useLiveClassifier'
 import { useCamera } from '@/features/calibration/useCamera'
+import { useCalibrationStore } from '@/features/calibration/calibrationStore'
 import { useGameStore } from '@/features/game/gameStore'
 import { useCharacterStage } from '@/features/progression/progressionStore'
 import { useUserStore } from '@/features/onboarding/userStore'
@@ -31,6 +32,12 @@ import { useToast } from '@/app/providers/ToastProvider'
 import { closePip, openPip, registerAutoPip } from '@/features/pip/pipController'
 import { usePipStore } from '@/features/pip/pipStore'
 import { MiniPostureWidget } from '@/components/session/MiniPostureWidget'
+
+/**
+ * 언마운트 안전망 타이머 — StrictMode 의 즉시 재마운트에서는 다음 마운트가
+ * 이 타이머를 취소하므로, "진짜" 화면 이탈에서만 finalize 가 실행됩니다.
+ */
+let pendingUnmountFinalize: number | undefined
 
 /**
  * S-09 집중 세션 — 사이드바를 숨기고 대시보드보다 단순하게 (docs/04 §3, docs/05 S-09)
@@ -56,11 +63,20 @@ export function Session() {
   const session = useSessionStore()
   const game = useGameStore()
   const completedRef = useRef(false)
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
 
   const isBad = snapshot.state === 'bad'
+  const isActive = session.status === 'running' || session.status === 'paused'
+
+  // 사용자 플래그(hasCalibration)와 실제 프로필이 어긋나면(스토리지 유실 등)
+  // 분류기가 영영 unstable 만 내므로, 프로필 실존 여부까지 확인합니다.
+  const hasProfile = useCalibrationStore((s) => Boolean(s.profile))
+  const missingProfile =
+    featureFlags.camera && hasCalibration && !hasProfile && !isDemo
 
   // 실제 카메라 자세 감지: 카메라 기능이 켜지고, 기준이 등록됐고, 데모가 아닐 때만.
-  const useRealCamera = featureFlags.camera && hasCalibration && !isDemo
+  const useRealCamera =
+    featureFlags.camera && hasCalibration && hasProfile && !isDemo
   const { state: camera, start: startCamera, stop: stopCamera } =
     useCamera(videoRef)
   useLiveClassifier(videoRef, camera)
@@ -95,6 +111,64 @@ export function Session() {
     stopCamera()
     closePip() // 세션이 끝나면 PiP·미니 위젯을 자동으로 닫습니다
   }, [session.status, stopCamera])
+
+  // 스트레칭에서 브라우저 뒤로가기로 돌아온 경우 — 세션을 이어서 진행합니다.
+  // 마운트 시 1회만: beginRest 직후(화면 전환 transition 이 끝나기 전)에
+  // 상태 변화 effect 가 바로 endRest 를 해버리면 안 되기 때문입니다.
+  useEffect(() => {
+    if (useSessionStore.getState().status === 'resting')
+      useSessionStore.getState().endRest()
+  }, [])
+
+  // 활성 세션 중 브라우저 뒤로가기 — 조용히 사라지지 않게 확인 모달을 띄웁니다.
+  // (BrowserRouter 선언형 라우터에는 useBlocker 가 없어 popstate 를 직접 다룹니다)
+  useEffect(() => {
+    if (!isActive) return
+
+    const pushSentinel = () => {
+      const state = window.history.state ?? {}
+      if (state.uprightSessionGuard) return
+      // router 가 쓰는 idx 를 이어가 보초 엔트리가 스택을 깨뜨리지 않게 합니다.
+      window.history.pushState(
+        { ...state, idx: (state.idx ?? 0) + 1, uprightSessionGuard: true },
+        '',
+      )
+    }
+    pushSentinel()
+
+    const onPopState = () => {
+      setLeaveConfirmOpen(true)
+      pushSentinel()
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [isActive])
+
+  // 새로고침·탭 닫기에서도 활성 세션이 소리 없이 사라지지 않게 확인을 요청합니다.
+  useEffect(() => {
+    if (!isActive) return
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isActive])
+
+  // 안전망: 가드를 우회해 화면을 벗어난 활성 세션은 기록을 남기고 종료합니다.
+  // (resting 은 스트레칭 뒤 같은 세션으로 돌아오므로 종료하지 않습니다)
+  useEffect(() => {
+    window.clearTimeout(pendingUnmountFinalize)
+    return () => {
+      pendingUnmountFinalize = window.setTimeout(() => {
+        const current = useSessionStore.getState()
+        if (current.status === 'running' || current.status === 'paused') {
+          finalizeSession('manual')
+          closePip()
+        }
+      }, 0)
+    }
+  }, [])
 
   // PiP 폴백 상태 + 자동 PiP(선택 확장, 카메라 사용 중일 때만 의미)
   const pipFallback = usePipStore((s) => s.fallbackActive)
@@ -135,11 +209,62 @@ export function Session() {
     finalizeSession('manual')
     stopCamera()
     closePip()
-    navigate(ROUTES.result(sessionId))
+    // 가드의 보초 히스토리 엔트리를 결과 화면으로 교체합니다.
+    navigate(ROUTES.result(sessionId), { replace: true })
+  }
+
+  const goStretch = () => {
+    if (session.status === 'running' || session.status === 'paused') {
+      // 세션 중 스트레칭: 타이머·자세 판정을 멈추고 같은 세션으로 돌아옵니다.
+      useSessionStore.getState().beginRest()
+      navigate(ROUTES.stretch(), {
+        state: { origin: 'active-session', sessionId },
+      })
+      return
+    }
+    if (session.status === 'completed' || session.status === 'aborted') {
+      // 이미 끝난 세션의 휴식: 완료 후 결과 화면으로 돌아갑니다.
+      navigate(ROUTES.stretch(), { state: { origin: 'result', sessionId } })
+      return
+    }
+    navigate(ROUTES.stretch())
   }
 
   return (
     <AppShell chrome="focus">
+      {/* 활성 세션 이탈 확인 — 뒤로가기가 세션을 조용히 지우지 않게 합니다 */}
+      {leaveConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4">
+          <dialog
+            open
+            aria-label="세션을 계속할까요?"
+            className="static m-0 w-full max-w-sm border-0 bg-transparent p-0"
+          >
+            <Card className="w-full">
+              <p className="text-lg font-bold text-ink">세션을 계속할까요?</p>
+              <p className="mt-1 text-sm text-ink-soft">
+                지금 나가면 여기까지 집중한 시간만 기록에 남아요.
+              </p>
+              <div className="mt-5 flex flex-col gap-2">
+                <Button fullWidth onClick={() => setLeaveConfirmOpen(false)}>
+                  계속 집중하기
+                </Button>
+                <Button
+                  fullWidth
+                  variant="secondary"
+                  onClick={() => {
+                    setLeaveConfirmOpen(false)
+                    endSession()
+                  }}
+                >
+                  세션 종료하고 나가기
+                </Button>
+              </div>
+            </Card>
+          </dialog>
+        </div>
+      )}
+
       {/* PiP 미지원·차단 시 화면 안 미니 위젯 (카메라 영상 미포함) */}
       {pipFallback && session.status !== 'idle' && <MiniPostureWidget />}
 
@@ -154,6 +279,10 @@ export function Session() {
       )}
 
       {/* 상단 — 과목·목표만 간결하게 */}
+      <BackButton
+        fallback={ROUTES.home}
+        onClick={isActive ? () => setLeaveConfirmOpen(true) : undefined}
+      />
       <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-ink-soft">
@@ -194,6 +323,24 @@ export function Session() {
               <Icon name="play" size={16} />이 세션 시작하기
             </Button>
           </div>
+        </Card>
+      )}
+
+      {missingProfile && (
+        <Card tone="yellow" className="mb-4 p-4">
+          <p className="text-sm font-bold text-ink">자세 기준을 찾을 수 없어요</p>
+          <p className="mt-1 text-sm text-ink-soft">
+            저장된 개인 기준이 없어 자세 변화를 비교할 수 없어요. 1분이면 다시
+            등록할 수 있어요.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="mt-3"
+            onClick={() => navigate(ROUTES.calibration)}
+          >
+            기준 다시 등록
+          </Button>
         </Card>
       )}
 
@@ -328,12 +475,8 @@ export function Session() {
               >
                 미니 위젯 열기
               </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => navigate(ROUTES.stretch())}
-              >
-                스트레칭 예약
+              <Button size="sm" variant="secondary" onClick={goStretch}>
+                잠깐 스트레칭
               </Button>
               {session.status === 'running' ? (
                 <Button size="sm" variant="ghost" onClick={() => session.pause()}>
@@ -359,7 +502,7 @@ export function Session() {
                 마감괴수에게 기본 공격이 들어갔어요.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => navigate(ROUTES.stretch())}>
+                <Button size="sm" onClick={goStretch}>
                   <Icon name="stretch" size={16} />2분 리셋 하기
                 </Button>
                 <Button

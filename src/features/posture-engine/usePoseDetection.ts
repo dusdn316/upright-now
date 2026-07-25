@@ -36,6 +36,7 @@ export function usePoseDetection(
 
     let cancelled = false
     let rafId = 0
+    let timeoutId = 0
     let lastAt = 0
     let lastVideoTime = -1
     const minInterval = 1000 / fps
@@ -52,9 +53,21 @@ export function usePoseDetection(
       if (cancelled) return
       setModelStatus('ready')
 
+      // 탭이 백그라운드로 가면 rAF 가 멈춰 감지가 통째로 얼어붙습니다
+      // (PiP 위젯이 unstable 로 굳던 원인). 숨김 상태에서는 setTimeout 으로
+      // 루프를 이어갑니다. 카메라를 캡처 중인 탭은 브라우저의 공격적 타이머
+      // 지연 대상에서 제외되어 감지 주기가 유지됩니다.
+      const schedule = () => {
+        if (typeof document !== 'undefined' && document.hidden) {
+          timeoutId = window.setTimeout(loop, minInterval)
+        } else {
+          rafId = requestAnimationFrame(loop)
+        }
+      }
+
       const loop = () => {
         if (cancelled) return
-        rafId = requestAnimationFrame(loop)
+        schedule()
 
         const video = videoRef.current
         if (!video || video.readyState < 2) return
@@ -85,6 +98,7 @@ export function usePoseDetection(
     return () => {
       cancelled = true
       cancelAnimationFrame(rafId)
+      window.clearTimeout(timeoutId)
     }
   }, [enabled, fps, videoRef])
 
