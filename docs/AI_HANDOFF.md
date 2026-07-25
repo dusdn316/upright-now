@@ -1,14 +1,16 @@
 # AI_HANDOFF — UpRight Now 작업 인수인계
 
-> 마지막 갱신: 2026-07-25 · PIP 완성 + 친구 방 최종 통합 대기
+> 마지막 갱신: 2026-07-25 · FINAL RELEASE FREEZE (v1.0.0-mvp)
 
 ## 현재 상태 요약
 
 - **Production**: https://upright-now.vercel.app
 - **GitHub**: https://github.com/suhyunkim1105-hash/upright-now (main)
-- MVP 완성: 카메라 자세 감지 · 캘리브레이션 v2 · 회복 게임 · 세션/기록 ·
-  성장 · 상점(구매/장착) · 설정(민감도/초기화) · 스트레칭 6종 ·
-  친구 방 코드(플래그 off)
+- 릴리스 태그: v1.0.0-mvp · 릴리스 커밋은 git log 참조
+- 구현 완료: 카메라 자세 감지 · 캘리브레이션 v2 · 회복 게임 · 세션/기록 ·
+  성장 · 상점(구매/장착) · 설정(민감도/초기화·PIP 토글) · 스트레칭 6종 ·
+  PIP 미니 위젯(폴백 포함) · 2인 친구 방(Production Supabase 라이브 검증)
+- 전체 테스트: lint 0 · typecheck · unit 173/173 · e2e 68/68(라이브 room 포함) · build OK
 - 기존 프로젝트 `C:\Users\수현\Desktop\거부기탈출` 은 읽기 전용 참고. 수정 금지.
 
 ## 자세 판정 파이프라인 (시간 소유권 주의)
@@ -83,7 +85,15 @@ npm run lint / typecheck / test / test:e2e / build
 ```
 173 unit + 68 e2e 통과(라이브 2인 room 포함). e2e 는 포트 5273 자체 서버.
 
-## 남은 리스크 / 다음 작업
+## 실카메라 수동 확인 필요 (Claude 환경에서는 검증 불가)
+
+- 정면 편안한 자세 30초 good 유지
+- 귀 가림·엉덩이 화면 밖에서도 측정 지속(limited)
+- 앞으로 숙여 5초 → 회복 기회, 복귀 5초 → 보상
+- PIP 자동 열림(Chrome 116+)
+- 두 브라우저 실기기 친구 방
+
+## 알려진 비차단 이슈 / 다음 작업
 
 1. 실카메라 임계값(tolerance 바닥값·yaw 0.7)은 합성 데이터 기준 — 실기기 튜닝 필요
 2. 친구 방 실환경 노트: presence 메타는 participantId 로 dedupe(최신 우선), 기린 싱크 피해는 두 회복 uuid 의 XOR 파생 id 사용(원본 id 재사용 시 dedup 충돌), realtime.messages RLS 정책이 없어 표준(비 private) 채널 사용 — 정책 추가 시 private 전환 가능

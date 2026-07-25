@@ -1,145 +1,83 @@
-# UpRight Now — Vercel 웹 프로토타입 구현 문서
+# UpRight Now
 
-| 항목 | 내용 |
-|---|---|
-| 프로젝트 | UpRight Now |
-| 슬로건 | 자세를 펴고, 오늘의 목표를 끝내는 시간 |
-| 문서 버전 | V1.0 |
-| 문서 상태 | 웹 프로토타입 구현 기준안 |
-| 작성 기준일 | 2026-07-24 |
-| 플랫폼 | 데스크톱 우선 웹앱 |
-| 배포 | Vercel |
-| 제품 중심 | 자세 관리 70% · 스터디 게임 30% |
+노트북 공부 중 흐트러진 자세를 조용히 알아차리고, 회복할 때마다
+거북이 캐릭터가 기린으로 성장하는 자세 회복 스터디 웹앱.
 
-## 한 줄 정의
+**Production**: https://upright-now.vercel.app
 
-시험·과제·코딩으로 노트북 앞에 오래 앉아 있는 대학생이, 개인 자세 기준에서 벗어난 변화를 조용히 알아차리고 회복할 때마다 캐릭터와 친구들의 게임이 진행되는 자세 회복 스터디 웹앱입니다.
+## 구현된 핵심 기능
 
-## 핵심 와우 포인트
+- **온디바이스 자세 감지** — MediaPipe Pose Landmarker(브라우저 내 추론),
+  5초 개인 기준 캘리브레이션, 개인 기준 대비 상대 변화만 판정
+- **회복 게임** — 이탈 5초 지속 → 회복 기회 → 기준 복귀 5초 → 특수 공격
+  (마감괴수 -40 · XP +30 · 잎사귀 +10, 세션당 XP 보상 상한 5회)
+- **집중 세션** — 25분 기본(15/50분·3분 데모), 80% 이상 진행 시 완주 인정
+- **성장·상점** — XP 파생 6단계(뽀각 거북 → 우뚝 기린), 잎사귀로 과잠·백팩
+  구매/장착, 첫 완주 후 상점 해제
+- **기록·설정** — 세션 요약·주간 출석, 민감도·소리·닉네임·전체 데이터 초기화
+- **스트레칭 6종** — 모드별 가중 랜덤, 건너뛰기 불이익 없음
+- **PIP 미니 위젯** — Document Picture-in-Picture(Chrome/Edge 116+),
+  설정에서 자동 열기 토글. 미지원·차단 시 화면 안 미니 위젯으로 자동 대체,
+  PIP 실패·닫힘이 세션을 중단시키지 않음
+- **2인 친구 방** — Supabase 익명 인증 + Realtime, 6자리 코드 입장,
+  공동 마감괴수(HP 2000), 기린 싱크 합동 공격, 스트레칭 방어막, 반응 3종
 
-> **내 자세가 게임 컨트롤러가 된다.**
+## 개인정보 처리 원칙
 
-```text
-자세 변화 감지
-→ 캐릭터가 조용히 반응
-→ 사용자가 자세를 회복
-→ 회복 에너지 생성
-→ 마감 몬스터 특수 공격
-→ 성장·포인트·친구 방 진행
-```
+- 모든 영상 분석은 브라우저 안에서만 수행합니다.
+- 카메라 영상·사진·프레임·랜드마크 원본은 저장·전송하지 않습니다.
+- 로컬에는 개인 기준 **요약값**과 세션 집계만 저장합니다.
+- 친구 방에는 닉네임·진행 상태·성공 이벤트만 전송합니다
+  (bad 상태·자세 좌표·개인 기준은 전송 금지, 코드 레벨에서 차단).
+- 의료 진단·치료를 제공하지 않습니다.
 
-## 이 패키지의 목적
-
-이 폴더는 단순한 기획 요약이 아니라 다음 작업을 바로 시작할 수 있도록 만든 구현 인수인계 패키지입니다.
-
-- Claude Code·Codex가 읽을 제품 기준
-- React·Vite·TypeScript 웹앱 화면 명세
-- MediaPipe 자세 상태 규칙
-- 2인 Supabase 실시간 방 명세
-- 6단계 캐릭터·상점 에셋 규격
-- 핑크·노랑·파랑 파스텔 대시보드 디자인 시스템
-- Vercel 배포 설정
-- 기능 완료 기준과 QA 시나리오
-
-## 기준 이미지
-
-- 캐릭터 성장 기준: [`references/character-growth-final.jpeg`](./references/character-growth-final.jpeg)
-- 웹 대시보드 기준: [`references/dashboard-ui-concept.png`](./references/dashboard-ui-concept.png)
-
-두 이미지는 **시각적 기준**입니다. 캐릭터 원본 시트 자체를 화면에서 잘라 쓰기보다, 동일한 스타일로 단계별 WebP·WebM 에셋을 별도로 제작하는 것을 원칙으로 합니다.
-
-## 문서 읽는 순서
-
-### 제품·디자인 확인
-
-1. [`docs/01_PRODUCT_BRIEF.md`](./docs/01_PRODUCT_BRIEF.md)
-2. [`docs/02_PRD.md`](./docs/02_PRD.md)
-3. [`docs/03_USER_FLOW.md`](./docs/03_USER_FLOW.md)
-4. [`docs/05_SCREEN_SPEC.md`](./docs/05_SCREEN_SPEC.md)
-5. [`docs/12_DESIGN_SYSTEM.md`](./docs/12_DESIGN_SYSTEM.md)
-6. [`docs/10_CHARACTER_ASSET_SPEC.md`](./docs/10_CHARACTER_ASSET_SPEC.md)
-
-### 개발 시작
-
-1. [`AGENTS.md`](./AGENTS.md)
-2. [`docs/06_POSTURE_ENGINE_SPEC.md`](./docs/06_POSTURE_ENGINE_SPEC.md)
-3. [`docs/07_GAME_SYSTEM_SPEC.md`](./docs/07_GAME_SYSTEM_SPEC.md)
-4. [`docs/08_SOCIAL_ROOM_SPEC.md`](./docs/08_SOCIAL_ROOM_SPEC.md)
-5. [`docs/15_TECHNICAL_ARCHITECTURE.md`](./docs/15_TECHNICAL_ARCHITECTURE.md)
-6. [`docs/16_ACCEPTANCE_TESTS.md`](./docs/16_ACCEPTANCE_TESTS.md)
-7. [`CLAUDE_CODE_MASTER_PROMPT.md`](./CLAUDE_CODE_MASTER_PROMPT.md)
-
-## 핵심 프로토타입 범위
-
-### 반드시 실제 작동
-
-- 로그인 없는 닉네임 저장
-- 도서관·내 공간·팀플 학습 프로필
-- 카메라 권한 안내
-- 5초 개인 자세 기준 등록
-- MediaPipe 기반 자세 상태 5단계
-- 25분 집중·2분 리셋
-- 6단계 캐릭터 성장
-- 자세 회복 특수 공격
-- 개인 마감 몬스터
-- 모드별 스트레칭 랜덤
-- 결과·출석·경험치·잎사귀 포인트
-- 대학 컬러 과잠·캠퍼스 백팩 상점
-- 실제 2인 친구 방
-- 공동 보스·기린 싱크 합동 공격
-- 로컬 기록 삭제
-- 개발용 QA Lab
-
-### 선택적 기능
-
-- Document Picture-in-Picture
-- 소리·TTS
-- 선택형 흐트러짐 자세 등록
-- 사용자 정의 학습 모드
-
-### 제외
-
-- 의료 진단과 치료 효과
-- 실제 집중도 AI 판정
-- 카메라 영상 업로드
-- 실시간 3D 모델·리깅
-- 자유 채팅
-- 공개 자세 점수·랭킹
-- 공식 학교 로고·마스코트 무단 사용
-- 결제·현금 상금
-
-## 권장 기술
-
-| 영역 | 권장안 |
-|---|---|
-| 앱 | React + Vite + TypeScript |
-| 라우팅 | React Router |
-| 전역 상태 | Zustand 또는 명시적 Reducer |
-| 스타일 | Tailwind CSS 또는 CSS Modules |
-| 자세 감지 | `@mediapipe/tasks-vision` Pose Landmarker |
-| 로컬 저장 | IndexedDB + Dexie |
-| 친구 방 | Supabase Auth Anonymous + Realtime Presence/Broadcast |
-| 캐릭터 | WebP 정지 이미지 + WebM 짧은 모션 |
-| 애니메이션 | Motion 계열 라이브러리 |
-| 테스트 | Vitest + Testing Library + Playwright |
-| 배포 | Vercel |
-
-## 프로젝트 생성 후 예상 명령
+## 로컬 실행
 
 ```bash
 npm install
-npm run dev
+npm run dev        # http://localhost:5173
+```
+
+## 테스트
+
+```bash
 npm run lint
 npm run typecheck
-npm run test
+npm run test       # Vitest 단위 테스트
+npm run test:e2e   # Playwright (자체 서버, 포트 5273)
 npm run build
 ```
 
-## 가장 먼저 할 작업
+친구 방 라이브 검증(두 브라우저 컨텍스트, Supabase 필요):
 
-1. 이 문서 패키지를 새 GitHub 저장소의 최상단에 넣습니다.
-2. `CLAUDE_CODE_MASTER_PROMPT.md`를 Claude Code에 전달합니다.
-3. 1단계에서는 실제 카메라 대신 QA 상태로 전체 흐름을 연결합니다.
-4. 2단계에서 MediaPipe를 연결합니다.
-5. 3단계에서 Supabase 2인 방을 연결합니다.
-6. 로컬 빌드가 성공한 뒤 GitHub를 Vercel에 연결합니다.
+```bash
+npx playwright test e2e/room-live.spec.ts
+```
+
+## 환경 변수 (이름만 — 값은 Vercel·.env.local 에)
+
+| 이름 | 용도 |
+|---|---|
+| `VITE_ENABLE_CAMERA` | 실제 웹캠 자세 감지 on/off |
+| `VITE_ENABLE_FRIEND_ROOM` | 2인 친구 방 on/off |
+| `VITE_SUPABASE_URL` | Supabase 프로젝트 URL (친구 방) |
+| `VITE_SUPABASE_ANON_KEY` | Supabase publishable key (친구 방) |
+| `VITE_ENABLE_QA_LAB` | 개발용 QA Lab (운영 기본 off) |
+
+친구 방 백엔드는 `supabase/schema.sql` 로 구성합니다
+(RLS + RPC 원자적 보스 HP, Anonymous Sign-Ins 필요).
+
+## 친구 방 구조
+
+```
+익명 로그인 → create_room/join_room RPC (RLS)
+→ Realtime Presence(준비·집중·자리비움) + Broadcast(회복·완료·응원)
+→ 보스 HP 는 DB 가 최종 기준: apply_room_damage RPC (event_id 중복 차단)
+→ 기린 싱크: 10초 내 양쪽 회복 → XOR 파생 id 로 1회만 -60
+연결 끊김 → 30초 재시도 → 실패 시 혼자 모드(개인 세션 유지)
+```
+
+## 문서
+
+- 인수인계: [docs/AI_HANDOFF.md](docs/AI_HANDOFF.md)
+- 기획·스펙 원문: [docs/](docs/) (00~21)
