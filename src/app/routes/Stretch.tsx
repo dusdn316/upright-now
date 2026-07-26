@@ -122,7 +122,7 @@ export function Stretch() {
       */
       void recordCampusContribution({
         kind: 'stretch_completed',
-        eventId: `campus-stretch-${attemptIdRef.current}`,
+        eventId: `campus-stretch-${stretchSessionIdRef.current}`,
         sessionId: useSessionStore.getState().sessionId,
       })
     }

@@ -82,6 +82,8 @@ describe('캠퍼스 플래그 OFF', () => {
   })
 
   it('결과 화면에 캠퍼스 공유 테두리·학교 배지가 없다', () => {
+    // 코어의 결과 화면 가드(세션 id 검증)를 통과하려면 데모 모드가 필요합니다.
+    useDemoStore.setState({ isDemo: true })
     renderAt('/result/demo')
     expect(screen.queryByTestId('campus-share-frame')).not.toBeInTheDocument()
     expect(screen.queryByTestId('campus-school-badge')).not.toBeInTheDocument()

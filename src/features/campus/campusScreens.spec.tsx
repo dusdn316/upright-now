@@ -189,6 +189,8 @@ describe('캠퍼스 화면 (플래그 ON)', () => {
 
   it('결과 화면 공유 카드에 학교 테두리와 배지가 붙는다', () => {
     useCampusThemeStore.getState().selectSchool('skku')
+    // 코어의 결과 화면 가드(세션 id 검증)를 통과하려면 데모 모드가 필요합니다.
+    useDemoStore.setState({ isDemo: true })
     renderAt('/result/demo')
 
     const frame = screen.getByTestId('campus-share-frame')

@@ -3,6 +3,7 @@ import { featureFlags } from '@/lib/feature-flags/flags'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useDemoStore } from '@/features/demo/demoMode'
+import { useRoomStore } from '@/features/rooms/roomStore'
 import { recordCampusContribution } from './recordContribution'
 
 /**
@@ -30,6 +31,9 @@ export function CampusContributionBridge() {
       lastStatus = state.status
       if (previous === 'completed' || state.status !== 'completed') return
       if (useDemoStore.getState().isDemo) return
+      // 감지 0초(비데모) 세션은 finalizeSession 이 곧 aborted 로 뒤집습니다.
+      // 타이머 tick 이 먼저 completed 를 쏘므로 여기서도 같은 조건으로 거릅니다.
+      if (state.detectableMs === 0) return
 
       const sessionId = state.sessionId
       void recordCampusContribution({
@@ -37,7 +41,9 @@ export function CampusContributionBridge() {
         eventId: `campus-session-${sessionId}`,
         sessionId,
       })
-      if (state.mode === 'room') {
+      // mode 는 설정에 남아있는 값이라 sticky 합니다 — 실제 방에 연결된
+      // 세션(roomId 존재)일 때만 친구 세션 보너스를 반영합니다.
+      if (state.mode === 'room' && useRoomStore.getState().roomId !== null) {
         void recordCampusContribution({
           kind: 'friend_session_completed',
           eventId: `campus-friend-${sessionId}`,
