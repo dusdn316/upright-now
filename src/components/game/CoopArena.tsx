@@ -89,6 +89,7 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
             stage={myStage}
             postureState={snapshot.state}
             attackTick={game.attackTick}
+            attackDurationMs={2200}
             size={150}
           />
           <p className="text-xs font-bold text-ink">{nickname}</p>
@@ -125,6 +126,7 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
               <CharacterViewport
                 stage={Math.min(6, Math.max(1, friend.stage)) as CharacterStage}
                 attackTick={room.friendAttackTick}
+                attackDurationMs={2200}
                 size={150}
                 decorative
               />

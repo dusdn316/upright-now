@@ -5,6 +5,8 @@ import { PostureGameBridge } from './providers/PostureGameBridge'
 import { useDemoBootstrap } from '@/features/demo/useDemoBootstrap'
 import { installDevApi } from '@/features/qa-lab/devApi'
 import { installPersistence } from '@/features/persistence/persist'
+import { unlockAudio } from '@/features/sound/soundEngine'
+import { installSoundTriggers } from '@/features/sound/soundTriggers'
 
 export function App() {
   // ?demo=1 또는 /lab 에서만 데모 값을 채웁니다.
@@ -14,7 +16,14 @@ export function App() {
   useEffect(() => {
     const uninstall = installPersistence()
     installDevApi()
-    return uninstall
+    // 효과음: 사용자 제스처 후에만 AudioContext 시작 (자동 재생 금지)
+    window.addEventListener('pointerdown', unlockAudio)
+    const uninstallSound = installSoundTriggers()
+    return () => {
+      uninstall()
+      window.removeEventListener('pointerdown', unlockAudio)
+      uninstallSound()
+    }
   }, [])
 
   return (

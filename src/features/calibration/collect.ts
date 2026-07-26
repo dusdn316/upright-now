@@ -1,6 +1,7 @@
 import { mad, median, MIN_SHOULDER_WIDTH, PRIMARY_FEATURES, AUXILIARY_FEATURES } from '@/features/posture-engine/features'
 import type { FeatureKey, LandmarkAnalysis } from '@/features/posture-engine/features'
 import type { CalibrationProfile, FeatureStat } from './calibrationStore'
+import { checkCalibrationFraming } from './framingGate'
 
 /**
  * 캘리브레이션 표본 수집 v3 — 순수 로직. 시간은 호출자가 넘깁니다.
@@ -32,6 +33,7 @@ export type CalibrationQuality =
   | 'low-visibility'
   | 'moving'
   | 'rotated'
+  | 'tilted'
   | 'timeout'
 
 interface Sample {
@@ -140,6 +142,22 @@ export function collectStep(
   if (analysis.shoulderWidth < MIN_SHOULDER_WIDTH || !analysis.inFrame)
     return invalid('low-visibility')
   if (analysis.severeRotation) return invalid('rotated')
+
+  // ---- 캘리브레이션 전용 프레이밍 게이트 (심한 기울임·누운 자세) ----
+  // hard invalid: 기울어진 상태의 표본이 기존 표본과 섞이지 않도록
+  // 표본 전체를 버리고 프레이밍 1.5초부터 처음부터 다시 시작합니다.
+  // (한 프레임 흔들림은 위의 moving 처리로 일시정지만 됩니다)
+  const framing = checkCalibrationFraming(analysis)
+  if (!framing.ok) {
+    return {
+      ...base,
+      state: { ...createCollectState(), startedAt },
+      quality: 'tilted',
+      step: 1,
+      progress: 0,
+      validCount: 0,
+    }
+  }
 
   // ---- 1단계: 카메라·프레이밍 확인 1.5초 ----
   if (!sampling) {

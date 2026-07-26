@@ -130,3 +130,20 @@ npm run lint / typecheck / test / test:e2e / build
 IN-목록에서 `between 180 and 7200` 범위로 변경한다 (멱등 — 여러 번 실행 안전,
 rollback SQL 은 파일 하단 주석). 실행 전까지 라이브 방은 15/25/50분 외
 사용자 지정 길이를 거부한다.
+
+## fix/core-session-flow — 모드 실연결·사운드·프레이밍 게이트 (2026-07-26 추가)
+
+- **모드 = 단일 유효 설정**: `useEffectiveModeConfig`(=useActiveModeConfig)가
+  soundPack(silent/soft/social)·ambient(low/default/rich)·stretch(seated/mixed/full)·
+  friendFeatures·monsterTheme·연결 자세 기준·내 모드 기본 시간을 공급한다.
+  자세 판정 임계값은 모드와 무관 (불변).
+- **사운드**: `src/features/sound/soundEngine.ts` 가 Web Audio 합성음의 단일
+  출처. `SOUND_MANIFEST` 의 `file: null` 자리를 채우면 실제 음원으로 교체
+  가능(호출부 불변). 전역 소리 OFF > 팩 필터 > 사용자 제스처(AudioContext)
+  > 250ms 중복 방지 순. 트리거는 `soundTriggers.ts` 한 곳에서 구독.
+- **캘리브레이션 프레이밍 게이트**: `framingGate.ts` — 눈선·어깨선 roll 18°,
+  눈-어깨 수직 관계, safe area. 의료 기준이 아니라 "안정적인 기준 등록
+  프레이밍 조건". hard invalid 는 표본 전체 폐기 + 1.5초 프레이밍부터 재시작.
+  세션 판정 임계값은 건드리지 않음.
+- **Preview 환경**: Vercel Preview 에 VITE_ENABLE_FRIEND_ROOM/REALTIME/CAMERA
+  =true + Supabase URL/ANON_KEY 등록됨 (Production 미변경).

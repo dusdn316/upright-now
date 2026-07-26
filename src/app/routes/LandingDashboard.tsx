@@ -114,7 +114,7 @@ export function LandingDashboard() {
               {`${modeConfig.emoji} ${modeConfig.name}`}
             </p>
             <p className="mt-0.5 text-xs text-ink-soft">
-              {`마감 괴물 · ${MONSTER_THEMES[modeConfig.monsterTheme].name}`}
+              {`괴물 · ${MONSTER_THEMES[modeConfig.monsterTheme].name}`}
             </p>
           </Card>
 

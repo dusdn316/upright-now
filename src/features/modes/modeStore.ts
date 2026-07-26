@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { loadLocal, saveLocal } from '@/lib/storage/local'
 import { LEARNING_PROFILES } from '@/constants/profiles'
 import { useUserStore } from '@/features/onboarding/userStore'
+import { useSessionStore } from '@/features/sessions/sessionStore'
+import { useCalibrationStore } from '@/features/calibration/calibrationStore'
 import type { LearningProfileKind } from '@/types'
 
 /**
@@ -23,6 +25,23 @@ export const MONSTER_THEMES: Record<
 
 export type AmbientLevel = 'low' | 'default' | 'rich'
 export type StretchPref = 'seated' | 'mixed' | 'full'
+export type SoundPackId = 'silent' | 'soft' | 'social'
+
+export const SOUND_PACK_LABEL: Record<SoundPackId, string> = {
+  silent: '무음',
+  soft: '부드러운 알림',
+  social: '협동 알림',
+}
+export const AMBIENT_LABEL: Record<AmbientLevel, string> = {
+  low: '작게',
+  default: '기본',
+  rich: '풍부하게',
+}
+export const STRETCH_LABEL: Record<StretchPref, string> = {
+  seated: '앉아서',
+  mixed: '혼합',
+  full: '전신',
+}
 
 export interface CustomMode {
   id: string
@@ -30,9 +49,10 @@ export interface CustomMode {
   emoji: string
   focusMin: number
   restMin: number
-  soundEnabled: boolean
+  soundPack: SoundPackId
   ambient: AmbientLevel
   stretch: StretchPref
+  friendFeatures: boolean
   /** 연결한 자세 기준 (calibrationStore 프로필 id). null = 세션 전 선택 */
   calibrationProfileId: string | null
   monsterTheme: MonsterThemeId
@@ -44,7 +64,7 @@ export interface ActiveModeConfig {
   kind: LearningProfileKind
   name: string
   emoji: string
-  soundDefault: boolean
+  soundPack: SoundPackId
   ambient: AmbientLevel
   stretch: StretchPref
   friendFeatures: boolean
@@ -60,7 +80,7 @@ const BUILTIN_CONFIG: Record<
   Omit<ActiveModeConfig, 'id' | 'kind' | 'name' | 'emoji' | 'calibrationProfileId'>
 > = {
   library: {
-    soundDefault: false,
+    soundPack: 'silent',
     ambient: 'low',
     stretch: 'seated',
     friendFeatures: false,
@@ -69,7 +89,7 @@ const BUILTIN_CONFIG: Record<
     restMin: null,
   },
   home: {
-    soundDefault: true,
+    soundPack: 'soft',
     ambient: 'rich',
     stretch: 'full',
     friendFeatures: false,
@@ -78,7 +98,7 @@ const BUILTIN_CONFIG: Record<
     restMin: null,
   },
   team: {
-    soundDefault: true,
+    soundPack: 'social',
     ambient: 'default',
     stretch: 'mixed',
     friendFeatures: true,
@@ -89,6 +109,24 @@ const BUILTIN_CONFIG: Record<
 }
 
 export const MAX_CUSTOM_MODES = 3
+
+const BUILTIN_NAMES = LEARNING_PROFILES.map((p) => p.name)
+
+/** 내 모드 이름 검증 — 통과하면 null, 아니면 사용자 안내 문구 */
+export function validateCustomModeName(
+  name: string,
+  existing: CustomMode[],
+  selfId?: string,
+): string | null {
+  const trimmed = name.trim()
+  if (trimmed.length < 2 || trimmed.length > 12) {
+    return '이름은 2~12자로 입력해 주세요.'
+  }
+  const taken =
+    BUILTIN_NAMES.includes(trimmed) ||
+    existing.some((m) => m.id !== selfId && m.name === trimmed)
+  return taken ? '같은 이름의 모드가 이미 있어요.' : null
+}
 
 interface PersistShape {
   activeModeId: string
@@ -115,7 +153,30 @@ const initial: PersistShape = {
   builtinCalibration: {},
 }
 
-const persisted = loadLocal<PersistShape>(KEY, initial)
+export type StoredCustomMode = Omit<CustomMode, 'soundPack' | 'friendFeatures'> & {
+  soundPack?: SoundPackId
+  friendFeatures?: boolean
+  /** 구버전 필드 — soft/silent 로 이관 */
+  soundEnabled?: boolean
+}
+
+export function migrateCustomMode(m: StoredCustomMode): CustomMode {
+  const { soundEnabled, ...rest } = m
+  return {
+    ...rest,
+    soundPack: m.soundPack ?? (soundEnabled ? 'soft' : 'silent'),
+    friendFeatures: m.friendFeatures ?? true,
+  }
+}
+
+const persistedRaw = loadLocal<
+  Omit<PersistShape, 'customModes'> & { customModes?: StoredCustomMode[] }
+>(KEY, initial)
+const persisted: PersistShape = {
+  ...initial,
+  ...persistedRaw,
+  customModes: (persistedRaw.customModes ?? []).map(migrateCustomMode),
+}
 
 function persist(s: PersistShape): void {
   saveLocal(KEY, s)
@@ -148,13 +209,36 @@ export const useModeStore = create<ModeStoreState>((set, get) => ({
     const next = { ...snap(s), activeModeId: id }
     persist(next)
     set({ activeModeId: id })
+
+    const config = resolveModeConfig(id, {
+      customModes: s.customModes,
+      builtinCalibration: s.builtinCalibration,
+    })
+    // 내 모드: 저장한 집중·휴식 시간을 세션 설정 기본값으로 반영.
+    // 기본 3모드는 현재 선택된 세션 시간을 그대로 둡니다.
+    if (config.kind === 'custom' && config.focusMin !== null) {
+      useSessionStore.getState().configure({
+        lengthId: 'custom',
+        customFocusMin: config.focusMin,
+        customRestMin: config.restMin ?? 5,
+      })
+    }
+    // 연결된 자세 기준이 실제로 존재할 때만 활성화합니다.
+    // 없거나 삭제된 id 면 기존 활성 기준을 임의로 바꾸지 않습니다(사용자 선택).
+    if (config.calibrationProfileId) {
+      const cal = useCalibrationStore.getState()
+      if (cal.profiles.some((p) => p.id === config.calibrationProfileId)) {
+        cal.selectProfile(config.calibrationProfileId)
+      }
+    }
   },
 
   createCustomMode: (mode) => {
     const s = get()
     if (s.customModes.length >= MAX_CUSTOM_MODES) return null
+    if (validateCustomModeName(mode.name, s.customModes) !== null) return null
     const id = `custom-${Date.now()}`
-    const customModes = [...s.customModes, { ...mode, id }]
+    const customModes = [...s.customModes, { ...mode, name: mode.name.trim(), id }]
     persist({ ...snap(s), customModes })
     set({ customModes })
     return id
@@ -162,8 +246,16 @@ export const useModeStore = create<ModeStoreState>((set, get) => ({
 
   updateCustomMode: (id, patch) => {
     const s = get()
+    const safePatch = { ...patch }
+    if (
+      safePatch.name !== undefined &&
+      validateCustomModeName(safePatch.name, s.customModes, id) !== null
+    ) {
+      delete safePatch.name
+    }
+    if (safePatch.name !== undefined) safePatch.name = safePatch.name.trim()
     const customModes = s.customModes.map((m) =>
-      m.id === id ? { ...m, ...patch, id } : m,
+      m.id === id ? { ...m, ...safePatch, id } : m,
     )
     persist({ ...snap(s), customModes })
     set({ customModes })
@@ -228,10 +320,10 @@ export function resolveModeConfig(
     kind: 'custom',
     name: custom.name,
     emoji: custom.emoji,
-    soundDefault: custom.soundEnabled,
+    soundPack: custom.soundPack,
     ambient: custom.ambient,
     stretch: custom.stretch,
-    friendFeatures: true,
+    friendFeatures: custom.friendFeatures,
     monsterTheme: custom.monsterTheme,
     calibrationProfileId: custom.calibrationProfileId,
     focusMin: custom.focusMin,
@@ -246,3 +338,7 @@ export function useActiveModeConfig(): ActiveModeConfig {
   const builtinCalibration = useModeStore((s) => s.builtinCalibration)
   return resolveModeConfig(activeModeId, { customModes, builtinCalibration })
 }
+
+/** 단일 진입점 별칭 — 화면·세션이 소비하는 유효 모드 설정 */
+export const useEffectiveModeConfig = useActiveModeConfig
+export const getEffectiveModeConfig = getActiveModeConfig

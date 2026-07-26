@@ -30,6 +30,7 @@ const QUALITY_COPY: Record<CalibrationQuality, string> = {
   'low-visibility': '얼굴과 양쪽 어깨가 보이게 앉고 주변을 조금 밝혀 주세요.',
   moving: '잠깐 편안한 자세를 유지해 주세요.',
   rotated: '화면 정면을 바라봐 주세요.',
+  tilted: '고개와 양쪽 어깨를 세우고 화면 정면을 바라봐 주세요.',
   timeout: '표본을 충분히 모으지 못했어요. 자세를 잡고 다시 시작할게요.',
 }
 
@@ -307,6 +308,16 @@ export function Calibration() {
                 className="pointer-events-none absolute inset-0 flex items-center justify-center"
               >
                 <div className="h-[62%] w-[46%] rounded-[42%] border-2 border-dashed border-white/70" />
+                {/* 정면 기준 가이드 — 눈선·어깨선을 수평으로 맞추도록 돕는 표시 */}
+                <div className="absolute inset-x-[18%] top-[30%] border-t-2 border-dashed border-white/50" />
+                <div className="absolute inset-x-[10%] top-[62%] border-t-2 border-dashed border-white/50" />
+                <div className="absolute inset-y-[10%] left-1/2 border-l-2 border-dashed border-white/30" />
+                <span className="absolute top-[30%] right-[6%] -translate-y-1/2 text-[10px] font-bold text-white/80">
+                  눈선
+                </span>
+                <span className="absolute top-[62%] right-[2%] -translate-y-1/2 text-[10px] font-bold text-white/80">
+                  어깨선
+                </span>
               </div>
             )}
           </div>

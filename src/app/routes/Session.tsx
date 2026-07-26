@@ -449,14 +449,23 @@ export function Session() {
                     postureState={snapshot.state}
                     visualState={visualIntent ?? 'idle'}
                     attackTick={game.attackTick}
+                    attackDurationMs={2200}
                     size={270}
                   />
-                  {/* 0.7~1.4초: 에너지 이동 */}
-                  {energyActive && (
+                  {/* 0.7~1.4초: 에너지 이동 — ambient low 는 효과 최소화 */}
+                  {energyActive && modeConfig.ambient !== 'low' && (
                     <span
                       aria-hidden="true"
                       className="anim-energy-beam pointer-events-none absolute top-1/2 right-0 h-4 w-10 rounded-full bg-gradient-to-r from-yellow to-coral"
                     />
+                  )}
+                  {/* rich: 추가 파티클·강조 링 */}
+                  {energyActive && modeConfig.ambient === 'rich' && (
+                    <span aria-hidden="true" data-testid="ambient-rich-fx" className="pointer-events-none absolute inset-0">
+                      <span className="energy-burst absolute inset-[6%] rounded-full" />
+                      <span className="absolute -top-1 left-1/4 animate-ping text-sm">✨</span>
+                      <span className="absolute top-1/4 -right-1 animate-ping text-sm">✨</span>
+                    </span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1 text-center sm:text-left">

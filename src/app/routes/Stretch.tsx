@@ -6,7 +6,7 @@ import { StretchFigure } from '@/components/stretch/StretchFigure'
 import { STRETCH_SAFETY } from '@/constants/copy'
 import { ROUTES } from '@/constants/routes'
 import { recommendStretch } from '@/features/stretch/recommend'
-import { useUserStore } from '@/features/onboarding/userStore'
+import { useActiveModeConfig } from '@/features/modes/modeStore'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { applyReward } from '@/features/game/rewards'
 import { useRoomStore } from '@/features/rooms/roomStore'
@@ -31,7 +31,7 @@ interface StretchLocationState {
 export function Stretch() {
   const navigate = useNavigate()
   const location = useLocation()
-  const profileId = useUserStore((s) => s.profileId)
+  const stretchPref = useActiveModeConfig().stretch
   const { push } = useToast()
 
   const locationState = (location.state ?? {}) as StretchLocationState
@@ -55,7 +55,7 @@ export function Stretch() {
   )
 
   const [routine, setRoutine] = useState<StretchRoutine>(() => {
-    const first = recommendStretch(profileId)
+    const first = recommendStretch(stretchPref)
     prevIdRef.current = first.id
     return first
   })
@@ -81,7 +81,7 @@ export function Stretch() {
   }, [remaining, paused, done])
 
   const pickAnother = () => {
-    const next = recommendStretch(profileId, prevIdRef.current)
+    const next = recommendStretch(stretchPref, prevIdRef.current)
     prevIdRef.current = next.id
     setRoutine(next)
     setRemaining(next.durationSec)

@@ -14,25 +14,41 @@ import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { useCharacterStage } from '@/features/progression/progressionStore'
 import { useGameStore } from '@/features/game/gameStore'
-import { useModeStore, useActiveModeConfig, MONSTER_THEMES } from '@/features/modes/modeStore'
+import { useModeStore, useActiveModeConfig, MONSTER_THEMES, SOUND_PACK_LABEL, STRETCH_LABEL } from '@/features/modes/modeStore'
 import { useDemoStore } from '@/features/demo/demoMode'
 import { useCalibrationStore, hasValidActiveProfile } from '@/features/calibration/calibrationStore'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 /** S-06 세션 설정 — 기본값 25분 (docs/05, docs/13 §7) */
 export function SessionSetup() {
   const navigate = useNavigate()
   const stage = useCharacterStage()
-  const { nickname, hasCalibration } = useUserStore()
+  const { nickname, hasCalibration, soundEnabled } = useUserStore()
   const modeConfig = useActiveModeConfig()
   const customModes = useModeStore((s) => s.customModes)
   const setActiveMode = useModeStore((s) => s.setActiveMode)
   const calProfiles = useCalibrationStore((s) => s.profiles)
   const activeProfileId = useCalibrationStore((s) => s.activeProfileId)
   const selectProfile = useCalibrationStore((s) => s.selectProfile)
-  const [customFocus, setCustomFocus] = useState(25)
-  const [customRest, setCustomRest] = useState(5)
+  // custom 길이가 이미 설정돼 있으면(내 모드 전환 등) 저장된 값에서 시작합니다.
+  const [customFocus, setCustomFocus] = useState(() => {
+    const s = useSessionStore.getState()
+    return s.lengthId === 'custom' ? Math.round(s.plannedMs / 60000) : 25
+  })
+  const [customRest, setCustomRest] = useState(() => {
+    const s = useSessionStore.getState()
+    return s.lengthId === 'custom' ? Math.round(s.restSec / 60) : 5
+  })
   const { subject, goal, lengthId, mode, configure, start } = useSessionStore()
+
+  // 내 모드를 고르면 그 모드의 기본 집중·휴식 시간을 입력값에도 반영합니다.
+  useEffect(() => {
+    if (modeConfig.focusMin !== null) {
+      setCustomFocus(modeConfig.focusMin)
+      setCustomRest(modeConfig.restMin ?? 5)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modeConfig.id])
   const resetGame = useGameStore((s) => s.reset)
   const isDemo = useDemoStore((s) => s.isDemo)
   const { push } = useToast()
@@ -206,7 +222,12 @@ export function SessionSetup() {
                   <select
                     aria-label="자세 기준 선택"
                     value={validActive ? (activeProfileId ?? '') : ''}
-                    onChange={(e) => e.target.value && selectProfile(e.target.value)}
+                    onChange={(e) => {
+                      if (!e.target.value) return
+                      selectProfile(e.target.value)
+                      // 선택한 기준을 현재 모드에 연결합니다.
+                      useModeStore.getState().linkCalibration(modeConfig.id, e.target.value)
+                    }}
                     className="h-9 rounded-xl border border-line bg-surface px-2 text-sm"
                   >
                     {!validActive && (
@@ -227,7 +248,15 @@ export function SessionSetup() {
               </li>
               <li className="flex items-center justify-between">
                 <span className="text-ink-soft">소리</span>
-                <Badge tone="muted">무음</Badge>
+                <Badge tone={soundEnabled && modeConfig.soundPack !== 'silent' ? 'blue' : 'muted'}>
+                  {soundEnabled
+                    ? SOUND_PACK_LABEL[modeConfig.soundPack]
+                    : '무음 (전체 소리 꺼짐)'}
+                </Badge>
+              </li>
+              <li className="flex items-center justify-between">
+                <span className="text-ink-soft">스트레칭</span>
+                <Badge tone="muted">{STRETCH_LABEL[modeConfig.stretch]}</Badge>
               </li>
               <li className="flex items-center justify-between">
                 <span className="text-ink-soft">카메라</span>
