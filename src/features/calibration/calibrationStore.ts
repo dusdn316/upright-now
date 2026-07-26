@@ -72,11 +72,19 @@ const migratedProfiles: CalibrationProfile[] = (
   loaded.profiles ?? (loaded.profile ? [loaded.profile] : [])
 ).filter((p) => p && p.version === 2)
 
-const migratedActiveId =
-  loaded.activeProfileId &&
-  migratedProfiles.some((p) => p.id === loaded.activeProfileId)
-    ? loaded.activeProfileId
-    : (migratedProfiles[0]?.id ?? null)
+// 구버전(단일 프로필) 저장형만 첫 프로필을 활성으로 승격합니다.
+// 신형 저장형에서 activeProfileId 가 비었거나 삭제된 프로필을 가리키면
+// 임의로 첫 프로필을 고르지 않고 사용자가 직접 선택하게 둡니다.
+const migratedActiveId = (() => {
+  if (loaded.activeProfileId === undefined) return migratedProfiles[0]?.id ?? null
+  if (
+    loaded.activeProfileId &&
+    migratedProfiles.some((p) => p.id === loaded.activeProfileId)
+  ) {
+    return loaded.activeProfileId
+  }
+  return null
+})()
 
 function activeOf(
   profiles: CalibrationProfile[],
@@ -124,8 +132,9 @@ export const useCalibrationStore = create<CalibrationStoreState>((set, get) => (
   removeProfile: (id) => {
     const s = get()
     const profiles = s.profiles.filter((p) => p.id !== id)
-    const activeProfileId =
-      s.activeProfileId === id ? (profiles[0]?.id ?? null) : s.activeProfileId
+    // 활성 프로필을 지우면 다른 프로필을 임의로 자동 선택하지 않습니다.
+    // 세션 시작은 hasValidActiveProfile 가드가 막고, 사용자가 직접 고릅니다.
+    const activeProfileId = s.activeProfileId === id ? null : s.activeProfileId
     persist({ profiles, activeProfileId, sensitivity: s.sensitivity })
     set({ profiles, activeProfileId, profile: activeOf(profiles, activeProfileId) })
   },
@@ -150,4 +159,20 @@ export function hashDeviceId(deviceId: string | null | undefined): string | null
     hash = ((hash << 5) + hash + deviceId.charCodeAt(i)) | 0
   }
   return (hash >>> 0).toString(16)
+}
+
+/**
+ * 세션 시작 가능 조건 — 활성 기준의 실제 유효성.
+ * activeProfileId 가 있고, 그 id 의 프로필이 실제로 존재하며,
+ * 현재 스키마 버전(v2)일 때만 참. (프로필 개수만 세지 않습니다)
+ */
+export function hasValidActiveProfile(
+  s: {
+    profiles: CalibrationProfile[]
+    activeProfileId: string | null
+  } = useCalibrationStore.getState(),
+): boolean {
+  if (!s.activeProfileId) return false
+  const active = s.profiles.find((p) => p.id === s.activeProfileId)
+  return Boolean(active && active.version === 2)
 }

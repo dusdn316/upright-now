@@ -40,4 +40,13 @@ export function clampCustomRestMin(min: number): number {
   return Math.min(30, Math.max(0, snapped))
 }
 
+/** 세션 설정 화면 제목 — 선택한 길이에 따라 즉시 갱신 */
+export function sessionSetupTitle(lengthId: string, customFocusMin: number): string {
+  if (lengthId === 'demo') return '이번 3분 동안 무엇을 살펴볼까요?'
+  if (lengthId === 'custom') return `이번 ${customFocusMin}분에 무엇을 끝내고 싶나요?`
+  const opt = SESSION_LENGTHS.find((o) => o.id === lengthId)
+  const min = opt ? Math.round(opt.focusSec / 60) : 25
+  return `이번 ${min}분에 무엇을 끝내고 싶나요?`
+}
+
 export const ATTENDANCE_MIN_MS = 10 * 60 * 1000

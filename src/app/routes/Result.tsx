@@ -18,6 +18,9 @@ import { applyReward } from '@/features/game/rewards'
 import { useToast } from '@/app/providers/ToastProvider'
 import { useSessionHistoryStore } from '@/features/sessions/sessionHistoryStore'
 import { useDemoStore } from '@/features/demo/demoMode'
+import { MONSTER_THEMES, useActiveModeConfig } from '@/features/modes/modeStore'
+import { sanitizeNextAction } from '@/features/sessions/sessionHistoryStore'
+import type { SessionSummary } from '@/types'
 
 /**
  * S-12 결과 — docs/05, docs/03 UF-12
@@ -31,8 +34,23 @@ export function Result() {
   const session = useSessionStore()
   const game = useGameStore()
   const summaries = useSessionHistoryStore((s) => s.summaries)
+  const updateSummary = useSessionHistoryStore((s) => s.update)
   const isDemo = useDemoStore((s) => s.isDemo)
-  const [progress, setProgress] = useState<string | null>(null)
+  const modeConfig = useActiveModeConfig()
+  // 새로고침해도 유지 — 저장된 기록에서 초기값을 복원합니다.
+  const storedSummary = summaries.find(
+    (x) => x.sessionId === session.sessionId || x.id === session.sessionId,
+  )
+  const [progress, setProgress] = useState<string | null>(
+    () => storedSummary?.targetProgress ?? null,
+  )
+  const [nextAction, setNextAction] = useState(
+    () => storedSummary?.nextAction ?? '',
+  )
+  const monsterName =
+    session.mode === 'room'
+      ? MONSTER_THEMES.komong.name
+      : MONSTER_THEMES[modeConfig.monsterTheme].name
   const { push } = useToast()
 
   // URL 의 세션 id 를 실제로 검증합니다.
@@ -74,6 +92,31 @@ export function Result() {
             <StatTile label="획득" value={`${past.xpEarned} XP · ${past.pointsEarned}P`} tone="canvas" />
           </div>
         </Card>
+        {(past.goal || past.targetProgressLabel || past.nextAction) && (
+          <Card className="mt-4">
+            <CardTitle>과제 메모</CardTitle>
+            <dl className="mt-3 flex flex-col gap-1.5 text-sm">
+              {past.goal && (
+                <div className="flex gap-2">
+                  <dt className="shrink-0 text-ink-soft">목표</dt>
+                  <dd className="font-semibold text-ink">{past.goal}</dd>
+                </div>
+              )}
+              {past.targetProgressLabel && (
+                <div className="flex gap-2">
+                  <dt className="shrink-0 text-ink-soft">진행도</dt>
+                  <dd className="font-semibold text-ink">{past.targetProgressLabel}</dd>
+                </div>
+              )}
+              {past.nextAction && (
+                <div className="flex gap-2">
+                  <dt className="shrink-0 text-ink-soft">다음 할 일</dt>
+                  <dd className="font-semibold text-ink">{past.nextAction}</dd>
+                </div>
+              )}
+            </dl>
+          </Card>
+        )}
         <div className="mt-4 flex gap-2">
           <Button variant="secondary" onClick={() => navigate(ROUTES.history)}>
             기록 보기
@@ -106,6 +149,12 @@ export function Result() {
 
   const selectProgress = (id: string) => {
     setProgress(id)
+    // 같은 sessionId 기록을 제자리 업데이트 — 중복 기록을 만들지 않습니다.
+    const option = TARGET_PROGRESS_OPTIONS.find((o) => o.id === id)
+    updateSummary(session.sessionId, {
+      targetProgress: id as SessionSummary['targetProgress'],
+      targetProgressLabel: option?.label,
+    })
     // 목표 완료 자기보고 → 보너스 (세션당 1회, applyReward 가 중복 차단)
     if (id === 'done' && completed) {
       const reward = applyReward({
@@ -134,7 +183,7 @@ export function Result() {
         }
         description={
           completed
-            ? '회복 행동이 마감괴수에게 그대로 전달됐어요.'
+            ? `회복 행동이 ${monsterName}에게 그대로 전달됐어요.`
             : '다음에 이어서 시작해도 괜찮아요.'
         }
         action={<Badge tone={completed ? 'green' : 'muted'}>{completed ? '완료' : '중도 종료'}</Badge>}
@@ -145,7 +194,7 @@ export function Result() {
           <Card tone="pink">
             <CardTitle>보스 전투 결과</CardTitle>
             <div className="mt-4">
-              <BossHealthBar hp={game.boss.hp} maxHp={game.boss.maxHp} />
+              <BossHealthBar hp={game.boss.hp} maxHp={game.boss.maxHp} name={monsterName} />
             </div>
             <div className="mt-4">
               <StatTile
@@ -214,6 +263,23 @@ export function Result() {
                 </Button>
               ))}
             </div>
+            <label className="mt-3 flex flex-col gap-1 text-xs">
+              <span className="font-semibold text-ink-soft">다음 할 일 (선택)</span>
+              <input
+                maxLength={80}
+                placeholder="예: 4장 예제 2개 풀기"
+                value={nextAction}
+                onChange={(e) => setNextAction(e.target.value)}
+                onBlur={() => {
+                  const clean = sanitizeNextAction(nextAction)
+                  setNextAction(clean)
+                  updateSummary(session.sessionId, {
+                    nextAction: clean || undefined,
+                  })
+                }}
+                className="h-9 rounded-xl border border-line bg-surface px-2 text-sm"
+              />
+            </label>
             <p className="mt-3 text-xs text-ink-soft">
               자세로 집중 여부를 추론하지 않아요. 진행도는 직접 남기는 값이에요.
             </p>

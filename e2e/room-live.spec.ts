@@ -110,16 +110,24 @@ test.describe('실제 2인 친구 방', () => {
     const bossA = pageA.getByRole('progressbar', { name: /꼬몽이/ })
     await expect(bossA).toHaveAttribute('value', '100')
 
-    // A 회복 성공 → 공동 보스 -40 (2000→1960 = 98%)
+    // 친구 회복 알림·기린 싱크는 모두 잠깐 뜨는 토스트라서,
+    // 회복을 실행하기 "전에" 세 화면 감시를 먼저 걸어 두고 동시에 기다립니다.
+    const toastWatch = Promise.all([
+      expect(pageB.getByText(/회복 에너지를 보냈어요/)).toBeVisible({
+        timeout: 30_000,
+      }),
+      expect(pageA.getByText(/기린 싱크/)).toBeVisible({ timeout: 30_000 }),
+      expect(pageB.getByText(/기린 싱크/)).toBeVisible({ timeout: 30_000 }),
+    ])
+
+    // A 회복 성공 → 공동 보스 -40, 곧바로 B 도 회복 —
+    // 10초 기린 싱크 윈도 안에 확실히 들어가도록 연달아 실행합니다.
     await pageA.evaluate(() => {
       ;(window as unknown as { __upright?: { startRecovery(): void; recoverySuccess(): void } })
         .__upright?.startRecovery()
       ;(window as unknown as { __upright?: { recoverySuccess(): void } })
         .__upright?.recoverySuccess()
     })
-
-    // B 도 곧바로 회복 — 10초 기린 싱크 윈도 안에 확실히 들어가도록
-    // HP 폴링(최대 20초)을 기다리지 않고 즉시 실행합니다.
     await pageB.evaluate(() => {
       ;(window as unknown as { __upright?: { startRecovery(): void; recoverySuccess(): void } })
         .__upright?.startRecovery()
@@ -127,16 +135,7 @@ test.describe('실제 2인 친구 방', () => {
         .__upright?.recoverySuccess()
     })
 
-    // B 화면에 친구 회복 알림
-    await expect(pageB.getByText(/회복 에너지를 보냈어요/)).toBeVisible({
-      timeout: 20_000,
-    })
-
-    // 싱크 플래시는 잠깐만 표시되므로 두 화면을 동시에 감시합니다.
-    await Promise.all([
-      expect(pageA.getByText(/기린 싱크/)).toBeVisible({ timeout: 20_000 }),
-      expect(pageB.getByText(/기린 싱크/)).toBeVisible({ timeout: 20_000 }),
-    ])
+    await toastWatch
     // 두 회복(-80) + 싱크(-60) = 1860 → 93% — 양쪽 HP 동기화 검증
     const bossB = pageB.getByRole('progressbar', { name: /꼬몽이/ })
     await expect(bossA).toHaveAttribute('value', '93', { timeout: 20_000 })

@@ -58,6 +58,17 @@ export function History() {
                       </span>
                     )}
                   </p>
+                  {(s.goal || s.targetProgressLabel || s.nextAction) && (
+                    <p className="text-xs text-ink-soft">
+                      {[
+                        s.goal ? `목표: ${s.goal}` : null,
+                        s.targetProgressLabel ? `진행도: ${s.targetProgressLabel}` : null,
+                        s.nextAction ? `다음 할 일: ${s.nextAction}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  )}
                   <p className="text-xs text-ink-soft">
                     {new Date(s.startedAt).toLocaleString('ko-KR', {
                       month: 'long',

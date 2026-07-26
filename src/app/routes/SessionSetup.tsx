@@ -3,7 +3,7 @@ import { AppShell, PageHeader } from '@/components/layout/AppShell'
 import { Badge, Button, Card, CardTitle, SegmentedControl, TextField } from '@/components/ui'
 import { Icon } from '@/components/ui/Icon'
 import { CharacterViewport } from '@/components/character/CharacterViewport'
-import { SESSION_LENGTHS } from '@/constants/session'
+import { SESSION_LENGTHS, sessionSetupTitle } from '@/constants/session'
 import { FRIEND_ROOM } from '@/constants/copy'
 import { featureFlags } from '@/lib/feature-flags/flags'
 import { useToast } from '@/app/providers/ToastProvider'
@@ -14,9 +14,9 @@ import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { useCharacterStage } from '@/features/progression/progressionStore'
 import { useGameStore } from '@/features/game/gameStore'
-import { useModeStore, useActiveModeConfig } from '@/features/modes/modeStore'
+import { useModeStore, useActiveModeConfig, MONSTER_THEMES } from '@/features/modes/modeStore'
 import { useDemoStore } from '@/features/demo/demoMode'
-import { useCalibrationStore } from '@/features/calibration/calibrationStore'
+import { useCalibrationStore, hasValidActiveProfile } from '@/features/calibration/calibrationStore'
 import { useState } from 'react'
 
 /** S-06 세션 설정 — 기본값 25분 (docs/05, docs/13 §7) */
@@ -37,9 +37,16 @@ export function SessionSetup() {
   const isDemo = useDemoStore((s) => s.isDemo)
   const { push } = useToast()
 
-  // 비데모 일반 세션은 자세 기준이 있어야 시작할 수 있습니다. (3분 데모 예외)
-  const calibrationRequired =
-    featureFlags.camera && !isDemo && lengthId !== 'demo' && calProfiles.length === 0
+  // 비데모 일반 세션은 "유효한 활성 기준"이 있어야 시작할 수 있습니다. (3분 데모 예외)
+  // 프로필 개수가 아니라 activeProfileId 가 가리키는 실제 프로필의 유효성을 봅니다.
+  const calibrationExempt = !featureFlags.camera || isDemo || lengthId === 'demo'
+  const validActive = hasValidActiveProfile({
+    profiles: calProfiles,
+    activeProfileId,
+  })
+  const needRegister = !calibrationExempt && calProfiles.length === 0
+  const needSelect = !calibrationExempt && calProfiles.length > 0 && !validActive
+  const calibrationRequired = needRegister || needSelect
 
   const startSession = () => {
     if (calibrationRequired) return
@@ -71,7 +78,7 @@ export function SessionSetup() {
   return (
     <AppShell chrome="focus">
       <PageHeader
-        title="이번 25분에 무엇을 끝내고 싶나요?"
+        title={sessionSetupTitle(lengthId, customFocus)}
         description="목표는 나중에 결과 화면에서 직접 진행도를 남길 수 있어요."
         back={ROUTES.home}
       />
@@ -168,7 +175,7 @@ export function SessionSetup() {
                   configure({ mode: id as 'solo' | 'room' })
                 }}
                 options={[
-                  { id: 'solo', label: '혼자 집중', sublabel: '개인 마감괴수' },
+                  { id: 'solo', label: '혼자 집중', sublabel: `개인 ${MONSTER_THEMES[modeConfig.monsterTheme].name}` },
                   {
                     id: 'room',
                     label: '친구와 함께',
@@ -198,10 +205,15 @@ export function SessionSetup() {
                 {calProfiles.length > 0 ? (
                   <select
                     aria-label="자세 기준 선택"
-                    value={activeProfileId ?? ''}
-                    onChange={(e) => selectProfile(e.target.value)}
+                    value={validActive ? (activeProfileId ?? '') : ''}
+                    onChange={(e) => e.target.value && selectProfile(e.target.value)}
                     className="h-9 rounded-xl border border-line bg-surface px-2 text-sm"
                   >
+                    {!validActive && (
+                      <option value="" disabled>
+                        사용할 자세 기준을 선택해 주세요
+                      </option>
+                    )}
                     {calProfiles.map((cp) => (
                       <option key={cp.id} value={cp.id}>{cp.name}</option>
                     ))}
@@ -226,7 +238,11 @@ export function SessionSetup() {
             </ul>
           </Card>
 
-          {calibrationRequired ? (
+          {needSelect ? (
+            <Button size="lg" fullWidth disabled>
+              사용할 자세 기준을 선택해 주세요
+            </Button>
+          ) : needRegister ? (
             <Button
               size="lg"
               fullWidth

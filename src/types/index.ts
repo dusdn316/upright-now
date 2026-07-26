@@ -76,6 +76,10 @@ export interface SessionSummary {
   xpEarned: number
   pointsEarned: number
   targetProgress?: 'done' | 'mostly' | 'half' | 'little'
+  /** 진행도 한글 라벨 — 과거 기록에 없어도 안전하게 표시 */
+  targetProgressLabel?: string
+  /** 다음 할 일 한 줄 (최대 80자, HTML·제어문자 제거) */
+  nextAction?: string
 }
 
 /* ------------------------------- 학습 프로필 ------------------------------ */

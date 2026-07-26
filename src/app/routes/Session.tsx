@@ -20,7 +20,7 @@ import { useCharacterVisualStore } from '@/features/posture-engine/characterVisu
 import { usePostureTicker } from '@/features/posture-engine/usePostureTicker'
 import { useLiveClassifier } from '@/features/posture-engine/useLiveClassifier'
 import { useCamera } from '@/features/calibration/useCamera'
-import { useCalibrationStore } from '@/features/calibration/calibrationStore'
+import { useCalibrationStore, hasValidActiveProfile } from '@/features/calibration/calibrationStore'
 import { useGameStore } from '@/features/game/gameStore'
 import { useCharacterStage } from '@/features/progression/progressionStore'
 import { useUserStore } from '@/features/onboarding/userStore'
@@ -74,9 +74,11 @@ export function Session() {
 
   // 사용자 플래그(hasCalibration)와 실제 프로필이 어긋나면(스토리지 유실 등)
   // 분류기가 영영 unstable 만 내므로, 프로필 실존 여부까지 확인합니다.
-  const hasProfile = useCalibrationStore((s) => Boolean(s.profile))
+  const hasProfile = useCalibrationStore((s) => hasValidActiveProfile(s))
+  const calProfileCount = useCalibrationStore((s) => s.profiles.length)
+  // 저장 유실(프로필 0개) 전용 — 미선택 상태는 아래 idle 가드가 안내합니다.
   const missingProfile =
-    featureFlags.camera && hasCalibration && !hasProfile && !isDemo
+    featureFlags.camera && hasCalibration && calProfileCount === 0 && !isDemo
 
   // 실제 카메라 자세 감지: 카메라 기능이 켜지고, 기준이 등록됐고, 데모가 아닐 때만.
   const useRealCamera =
@@ -321,14 +323,22 @@ export function Session() {
         <Card tone="yellow" className="mb-4 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-ink-soft">
-              자세 기준을 먼저 등록해야 세션을 시작할 수 있어요. 1분이면 돼요.
+              {calProfileCount > 0
+                ? '사용할 자세 기준을 선택해 주세요. 세션 설정에서 고를 수 있어요.'
+                : '자세 기준을 먼저 등록해야 세션을 시작할 수 있어요. 1분이면 돼요.'}
             </p>
-            <Button
-              size="sm"
-              onClick={() => navigate(`${ROUTES.calibration}?return=${ROUTES.session(sessionId)}`)}
-            >
-              자세 기준 등록
-            </Button>
+            {calProfileCount > 0 ? (
+              <Button size="sm" onClick={() => navigate(ROUTES.sessionSetup)}>
+                자세 기준 선택하러 가기
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => navigate(`${ROUTES.calibration}?return=${ROUTES.session(sessionId)}`)}
+              >
+                자세 기준 등록
+              </Button>
+            )}
           </div>
         </Card>
       )}
@@ -562,7 +572,7 @@ export function Session() {
                 오늘의 세션을 마쳤어요.
               </p>
               <p className="mt-1 text-sm text-ink-soft">
-                마감괴수에게 기본 공격이 들어갔어요.
+                {`${monsterName}에게 기본 공격이 들어갔어요.`}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button size="sm" onClick={goStretch}>

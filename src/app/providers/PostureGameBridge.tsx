@@ -7,6 +7,7 @@ import { useToast } from './ToastProvider'
 import { RECOVERY_COPY } from '@/constants/copy'
 import { useCharacterVisualStore } from '@/features/posture-engine/characterVisualStore'
 import { useRoomStore } from '@/features/rooms/roomStore'
+import { MONSTER_THEMES, getActiveModeConfig } from '@/features/modes/modeStore'
 import { reportRecovery } from '@/features/rooms/roomService'
 
 /**
@@ -58,13 +59,17 @@ export function PostureGameBridge() {
     if (useRoomStore.getState().phase === 'running') {
       void reportRecovery()
     }
+    const monsterName =
+      useRoomStore.getState().phase === 'running'
+        ? MONSTER_THEMES.komong.name
+        : MONSTER_THEMES[getActiveModeConfig().monsterTheme].name
 
     push({
       title: RECOVERY_COPY.success,
       description:
         reward.xp > 0
-          ? `마감괴수에게 특수 공격! +${reward.xp} XP`
-          : '마감괴수에게 특수 공격! (이번 세션 XP 보상 상한에 도달했어요)',
+          ? `${monsterName}에게 특수 공격! +${reward.xp} XP`
+          : `${monsterName}에게 특수 공격! (이번 세션 XP 보상 상한에 도달했어요)`,
       tone: 'success',
     })
   }, [lastEvent, push])

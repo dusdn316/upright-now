@@ -319,12 +319,12 @@ export function Room() {
             </Card>
 
             <Card>
-              <CardTitle>공동 마감괴수</CardTitle>
+              <CardTitle>공동 팀플 괴물 꼬몽이</CardTitle>
               <div className="mt-3">
                 <Progress
                   value={room.bossHp / room.bossMaxHp}
                   tone="pink"
-                  label="공동 보스 체력"
+                  label="팀플 괴물 꼬몽이 체력"
                   thick
                 />
                 <p className="mt-1 tabular text-xs text-ink-soft">

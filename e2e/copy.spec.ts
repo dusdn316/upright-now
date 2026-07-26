@@ -25,6 +25,8 @@ const FORBIDDEN = [
  * QA Lab(/lab) 내부는 개발 도구이므로 예외입니다.
  */
 const INTERNAL = [
+  // 내부 코드명 — 사용자 화면에는 모드별 공식 괴물 이름만 씁니다.
+  /마감괴수/,
   /Phase\s*\d/i,
   /개발용/,
   /QA Lab · 상태 주입/,
