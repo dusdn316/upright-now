@@ -10,7 +10,15 @@
 export type CampusPatternId = 'grid' | 'arch' | 'stripe' | 'dots' | 'weave'
 
 /** 가상 캠퍼스 지도의 구역. 실제 학교 부지를 복제하지 않습니다. */
-export type CampusZoneId = 'library' | 'plaza' | 'lecture' | 'lawn' | 'cafe'
+export type CampusZoneId =
+  | 'library'
+  | 'plaza'
+  | 'lecture'
+  | 'lawn'
+  | 'cafe'
+  | 'dorm'
+  | 'field'
+  | 'pond'
 
 /**
  * 색 출처.

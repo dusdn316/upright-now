@@ -167,6 +167,21 @@ export const CAMPUS_ZONE_META: Record<
   CampusZoneId,
   { label: string; icon: string; description: string }
 > = {
+  dorm: {
+    label: '기숙사',
+    icon: 'home',
+    description: '생활의 거점 — 꾸준함이 지키는 곳이에요.',
+  },
+  field: {
+    label: '운동장',
+    icon: 'play',
+    description: '넓고 탁 트인 만큼 자주 뒤집혀요.',
+  },
+  pond: {
+    label: '산책로·연못',
+    icon: 'leaf',
+    description: '느긋한 산책 코스 — 방어가 약한 편이에요.',
+  },
   library: {
     label: '도서관',
     icon: 'book',

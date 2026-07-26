@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { CAMPUS_ZONE_META, getSchoolPreset } from '@/constants/campus'
-import { MAP_COLS, MAP_ROWS, tileLabel } from '@/features/campus/campusMap'
+import { tileLabel } from '@/features/campus/campusMap'
+import { shapeFor } from '@/features/campus/islandMap'
 import { captureProgress, tileStatus } from '@/features/campus/territory'
 import { useCampusStore } from '@/features/campus/campusStore'
 import { useCampusThemeStore } from '@/features/campus/campusThemeStore'
@@ -53,19 +54,45 @@ export function TerritoryMap({
   const colorOf = useSchoolColor()
   const mySchoolId = useCampusThemeStore((s) => s.schoolId)
 
+  // 섬 표현 계층 — territory 폴리곤이 있는 타일만 그립니다.
+  // tileId 는 기존 12×8 모델 그대로라 저장 데이터가 이어집니다.
   const ordered = useMemo(
-    () => [...tiles].sort((a, b) => a.y - b.y || a.x - b.x),
+    () =>
+      [...tiles]
+        .filter((t) => shapeFor(t) !== null)
+        .sort((a, b) => a.y - b.y || a.x - b.x),
     [tiles],
   )
+  const [bgBroken, setBgBroken] = useState(false)
 
   return (
-    <fieldset
-      data-testid="territory-map"
-      className="m-0 grid w-full min-w-0 gap-[3px] border-0 p-0"
-      style={{ gridTemplateColumns: `repeat(${MAP_COLS}, minmax(0, 1fr))` }}
-    >
-      <legend className="sr-only">{`가상 캠퍼스 지도 ${MAP_COLS}×${MAP_ROWS}`}</legend>
-      {ordered.map((tile) => {
+    <div data-testid="territory-map" className="relative w-full min-w-0">
+      <p className="sr-only">{`가상 캠퍼스 섬 지도 (territory ${ordered.length}곳)`}</p>
+      <svg
+        viewBox="0 0 120 84"
+        className="h-auto w-full"
+        role="group"
+        aria-label="가상 캠퍼스 섬 지도"
+      >
+        {/* 배경 — 최종 이미지는 별도 제작 후 교체 (없으면 자체 SVG 섬) */}
+        {!bgBroken ? (
+          <image
+            href="/assets/campus/campus-map-bg.webp"
+            x="0"
+            y="0"
+            width="120"
+            height="84"
+            preserveAspectRatio="xMidYMid slice"
+            onError={() => setBgBroken(true)}
+          />
+        ) : null}
+        <path
+          d="M 12 40 C 8 22 26 8 48 7 C 74 5 106 12 112 32 C 118 52 102 74 74 78 C 46 82 16 70 12 48 Z"
+          fill={bgBroken ? '#EAE4D3' : 'transparent'}
+          stroke="#D9D1BE"
+          strokeWidth="1.2"
+        />
+        {ordered.map((tile) => {
         const status = tileStatus(tile)
         const owner = colorOf(tile.ownerSchoolId)
         const challenger = colorOf(tile.challengerSchoolId)
@@ -92,56 +119,78 @@ export function TerritoryMap({
           .filter(Boolean)
           .join(', ')
 
+        const shape = shapeFor(tile)!
+        const flashing = flashTileIds.includes(tile.id)
         return (
-          <button
-            key={tile.id}
-            type="button"
-            data-testid="territory-tile"
-            data-tile-id={tile.id}
-            data-tile-status={status}
-            data-zone={tile.zone}
-            data-owner={tile.ownerSchoolId ?? 'none'}
-            data-challenger={tile.challengerSchoolId ?? 'none'}
-            aria-label={label}
-            aria-pressed={onSelectTile ? selected : undefined}
-            onClick={() => onSelectTile?.(tile)}
-            /*
-              읽기 전용 지도(선택 핸들러 없음)에서는 96개 타일이 Tab 순서를
-              가로막지 않게 합니다. 스크린리더 탐색에는 그대로 노출됩니다.
-            */
-            tabIndex={onSelectTile ? 0 : -1}
-            className={[
-              'relative aspect-square min-w-0 rounded-[4px] transition',
-              status === 'contested' ? 'campus-tile--contested' : '',
-              flashTileIds.includes(tile.id) ? 'anim-campus-capture' : '',
-              selected ? 'ring-2 ring-ink ring-offset-1' : '',
-              onSelectTile ? 'cursor-pointer hover:brightness-110' : 'cursor-default',
-            ].join(' ')}
-            style={style}
-          >
+          <g key={tile.id}>
+            <polygon
+              data-testid="territory-tile"
+              data-tile-id={tile.id}
+              data-tile-status={status}
+              data-zone={tile.zone}
+              data-owner={tile.ownerSchoolId ?? 'none'}
+              data-challenger={tile.challengerSchoolId ?? 'none'}
+              role={onSelectTile ? 'button' : 'img'}
+              aria-label={`${shape.name} — ${label}`}
+              aria-pressed={onSelectTile ? selected : undefined}
+              tabIndex={onSelectTile ? 0 : -1}
+              onClick={() => onSelectTile?.(tile)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onSelectTile?.(tile)
+                }
+              }}
+              points={shape.points}
+              fill={owner ?? ZONE_TINT[tile.zone] ?? '#EFE9DC'}
+              stroke={
+                status === 'contested'
+                  ? (challenger ?? '#FF6464')
+                  : selected
+                    ? '#171717'
+                    : '#ffffff'
+              }
+              strokeWidth={selected ? 1.2 : 0.6}
+              strokeDasharray={status === 'contested' ? '2 1.2' : undefined}
+              className={[
+                'transition',
+                flashing ? 'anim-campus-capture' : '',
+                onSelectTile ? 'cursor-pointer hover:brightness-110' : '',
+              ].join(' ')}
+              style={style}
+            />
             {/* 색만으로 정보를 전달하지 않기 위한 보조 표시 */}
             {isMine && (
-              <span
+              <text
+                x={shape.cx}
+                y={shape.cy + 1.4}
+                textAnchor="middle"
+                fontSize="3.6"
+                fontWeight="900"
+                fill="#ffffff"
                 aria-hidden="true"
-                className="absolute inset-0 flex items-center justify-center text-[9px] font-black text-white/90"
+                pointerEvents="none"
               >
                 ★
-              </span>
+              </text>
             )}
             {status === 'contested' && !isMine && (
-              <span
+              <rect
                 aria-hidden="true"
-                className="absolute right-0 bottom-0 left-0 h-[3px] rounded-b-[4px]"
-                style={{
-                  backgroundColor: challenger ?? '#FF6464',
-                  width: `${Math.round(progress * 100)}%`,
-                }}
+                pointerEvents="none"
+                x={shape.cx - 4}
+                y={shape.cy + 3.4}
+                width={8 * Math.max(0.05, progress)}
+                height={1}
+                rx={0.5}
+                fill={challenger ?? '#FF6464'}
               />
             )}
-          </button>
+          </g>
         )
       })}
-    </fieldset>
+      </svg>
+    </div>
   )
 }
 

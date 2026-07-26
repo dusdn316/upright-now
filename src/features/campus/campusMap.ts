@@ -47,6 +47,9 @@ export const ZONE_BASE_DEFENSE: Record<CampusZoneId, number> = {
   plaza: 200,
   cafe: 140,
   lawn: 120,
+  dorm: 160,
+  field: 130,
+  pond: 110,
 }
 
 /** 새 시즌의 초기 지도 — 모든 타일이 중립 상태입니다. */
