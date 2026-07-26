@@ -27,6 +27,21 @@ export type SoundEventId =
   | 'giraffe_sync'
   | 'coop_attack'
   | 'monster_evolve'
+  | 'session_last_minute'
+  | 'session_pause'
+  | 'session_resume'
+  | 'stretch_complete'
+  | 'item_purchase'
+  | 'item_equip'
+  | 'attendance_bonus'
+  | 'friend_disconnect'
+  | 'friend_reconnect'
+  | 'friend_complete'
+  | 'custom_reaction'
+  | 'territory_contest'
+  | 'territory_capture'
+  | 'territory_defend'
+  | 'season_end'
 
 interface SoundSpec {
   /** 나중에 실제 음원으로 교체할 때 채우는 자리 (현재는 synth 사용) */
@@ -50,6 +65,21 @@ export const SOUND_MANIFEST: Record<SoundEventId, SoundSpec> = {
   giraffe_sync: { file: null, tones: [[523, 0], [659, 0.08], [880, 0.16]], durSec: 0.3, wave: 'triangle', gain: 0.09 },
   coop_attack: { file: null, tones: [[330, 0], [247, 0.07]], durSec: 0.18, wave: 'square', gain: 0.05 },
   monster_evolve: { file: null, tones: [[196, 0], [262, 0.1], [330, 0.2]], durSec: 0.34, wave: 'triangle', gain: 0.08 },
+  session_last_minute: { file: null, tones: [[587, 0], [587, 0.12]], durSec: 0.24, wave: 'sine', gain: 0.07 },
+  session_pause: { file: null, tones: [[440, 0], [330, 0.08]], durSec: 0.18, wave: 'sine', gain: 0.06 },
+  session_resume: { file: null, tones: [[330, 0], [440, 0.08]], durSec: 0.18, wave: 'sine', gain: 0.06 },
+  stretch_complete: { file: null, tones: [[494, 0], [587, 0.09]], durSec: 0.2, wave: 'triangle', gain: 0.08 },
+  item_purchase: { file: null, tones: [[659, 0], [988, 0.08]], durSec: 0.2, wave: 'triangle', gain: 0.08 },
+  item_equip: { file: null, tones: [[523, 0]], durSec: 0.12, wave: 'sine', gain: 0.07 },
+  attendance_bonus: { file: null, tones: [[523, 0], [659, 0.09], [880, 0.18]], durSec: 0.3, wave: 'triangle', gain: 0.08 },
+  friend_disconnect: { file: null, tones: [[392, 0], [294, 0.09]], durSec: 0.2, wave: 'sine', gain: 0.06 },
+  friend_reconnect: { file: null, tones: [[294, 0], [392, 0.09]], durSec: 0.2, wave: 'sine', gain: 0.06 },
+  friend_complete: { file: null, tones: [[523, 0], [784, 0.1]], durSec: 0.24, wave: 'triangle', gain: 0.08 },
+  custom_reaction: { file: null, tones: [[740, 0], [932, 0.07]], durSec: 0.18, wave: 'triangle', gain: 0.07 },
+  territory_contest: { file: null, tones: [[349, 0], [349, 0.1]], durSec: 0.22, wave: 'square', gain: 0.05 },
+  territory_capture: { file: null, tones: [[440, 0], [554, 0.08], [659, 0.16]], durSec: 0.3, wave: 'triangle', gain: 0.08 },
+  territory_defend: { file: null, tones: [[494, 0], [494, 0.09]], durSec: 0.2, wave: 'sine', gain: 0.07 },
+  season_end: { file: null, tones: [[659, 0], [523, 0.12], [392, 0.24]], durSec: 0.4, wave: 'triangle', gain: 0.08 },
 }
 
 const SOFT_EVENTS: SoundEventId[] = [
@@ -59,6 +89,17 @@ const SOFT_EVENTS: SoundEventId[] = [
   'session_complete',
   'level_up',
   'monster_evolve',
+  'session_last_minute',
+  'session_pause',
+  'session_resume',
+  'stretch_complete',
+  'item_purchase',
+  'item_equip',
+  'attendance_bonus',
+  'territory_contest',
+  'territory_capture',
+  'territory_defend',
+  'season_end',
 ]
 
 export const PACK_EVENTS: Record<'silent' | 'soft' | 'social', SoundEventId[]> = {
@@ -71,6 +112,10 @@ export const PACK_EVENTS: Record<'silent' | 'soft' | 'social', SoundEventId[]> =
     'reaction_received',
     'giraffe_sync',
     'coop_attack',
+    'friend_disconnect',
+    'friend_reconnect',
+    'friend_complete',
+    'custom_reaction',
   ],
 }
 

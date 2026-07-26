@@ -62,7 +62,7 @@ function ReactionBubble({ participantId }: { participantId: string | null }) {
       data-testid="reaction-bubble"
       className="anim-toast-in absolute -top-2 left-1/2 z-10 -translate-x-1/2 rounded-2xl border border-line bg-surface px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-ink shadow-card"
     >
-      {REACTION_LABEL[latest.reaction]}
+      {latest.reactionText ?? REACTION_LABEL[latest.reaction]}
     </span>
   )
 }
@@ -72,6 +72,7 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
   const myStage = useCharacterStage()
   const equipped = useProgressionStore((s) => s.equipped)
   const nickname = useUserStore((s) => s.nickname)
+  const customReactions = useUserStore((s) => s.customReactions)
   const snapshot = usePostureStore((s) => s.snapshot)
   const game = useGameStore()
 
@@ -160,6 +161,16 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
             onClick={() => void sendReaction(kind)}
           >
             {REACTION_LABEL[kind]}
+          </button>
+        ))}
+        {customReactions.map((text) => (
+          <button
+            key={text}
+            type="button"
+            className="h-8 rounded-xl border border-pink/40 bg-pink-soft px-2.5 text-xs font-semibold text-ink hover:bg-canvas"
+            onClick={() => void sendReaction('cheer', text)}
+          >
+            {text}
           </button>
         ))}
       </div>

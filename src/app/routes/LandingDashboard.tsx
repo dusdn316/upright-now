@@ -40,6 +40,8 @@ import {
   selectTodayFocus,
 } from '@/features/sessions/todayFocus'
 import { CampusDashboardCard } from '@/components/campus/CampusDashboardCard'
+import { computeStreak } from '@/features/progression/streak'
+import { kstDateKey } from '@/lib/time/kst'
 
 /** S-01 랜딩·대시보드 — docs/05_SCREEN_SPEC.md */
 export function LandingDashboard() {
@@ -59,6 +61,7 @@ export function LandingDashboard() {
   const todayFocus = useMemo(() => selectTodayFocus(summaries), [summaries])
   // 홈·기록·성장이 공유하는 단일 집계 — 값 불일치를 원천 차단합니다.
   const stats = useMemo(() => selectSessionStats(summaries), [summaries])
+  const streak = useMemo(() => computeStreak(attendance, kstDateKey()), [attendance])
   const totalFocusMs = stats.totalFocusedMs
 
   const isFirstVisit = !hasOnboarded
@@ -67,7 +70,13 @@ export function LandingDashboard() {
     <AppShell
       rail={
         <>
-          <AttendanceCalendar attendance={attendance} />
+          <div>
+            <AttendanceCalendar attendance={attendance} />
+            <p className="mt-1.5 px-1 text-xs text-ink-soft">
+              {`연속 출석 ${streak.current}일 · 최고 ${streak.best}일`}
+              {streak.next && ` · 다음 보너스(+${streak.next.points}P)까지 ${streak.next.remaining}일`}
+            </p>
+          </div>
 
           {/* 캠퍼스 카드 — 플래그가 꺼져 있으면 렌더되지 않습니다. */}
           <CampusDashboardCard />

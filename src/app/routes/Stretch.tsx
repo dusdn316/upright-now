@@ -13,6 +13,7 @@ import { isRoomSessionActive } from '@/features/rooms/roomStore'
 import { reportStretchComplete } from '@/features/rooms/roomService'
 import { recordCampusContribution } from '@/features/campus/recordContribution'
 import { useToast } from '@/app/providers/ToastProvider'
+import { playSound } from '@/features/sound/soundEngine'
 import type { StretchRoutine } from '@/types'
 
 /**
@@ -105,6 +106,7 @@ export function Stretch() {
       type: 'stretch_completed',
     })
     if (outcome.applied) {
+      playSound('stretch_complete')
       push({
         title: '방어막을 회복했어요! 잠깐의 회복 휴식, 잘했어요.',
         description: `+${outcome.xp} XP · +${outcome.points}P`,

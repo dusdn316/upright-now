@@ -37,6 +37,8 @@ export interface ReactionFeedItem {
   participantId: string
   nickname: string
   reaction: ReactionKind
+  /** 커스텀 응원 문구 (있으면 기본 라벨 대신 표시) */
+  reactionText?: string
   at: number
 }
 

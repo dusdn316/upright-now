@@ -2,6 +2,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { ensureAnonymousUser, getSupabase } from '@/lib/supabase/client'
 import {
   generateRoomCode,
+  sanitizeReactionText,
   sanitizeRoomEvent,
   ROOM_DAMAGE,
   ROOM_SHIELD_PER_STRETCH,
@@ -85,6 +86,7 @@ function handleEvent(event: RoomEvent): void {
       participantId: event.participantId,
       nickname: event.nickname,
       reaction: event.reaction,
+      reactionText: event.reactionText,
       at: Date.now(),
     })
     return
@@ -486,18 +488,23 @@ export async function reportSessionComplete(): Promise<void> {
 
 let lastReactionAt = 0
 
-export async function sendReaction(reaction: ReactionKind): Promise<void> {
+export async function sendReaction(
+  reaction: ReactionKind,
+  text?: string,
+): Promise<void> {
   const s = store()
   if (!s.roomId || !s.myId) return
   // 5초에 1회 — 자유 채팅 방지
   if (Date.now() - lastReactionAt < 5000) return
   lastReactionAt = Date.now()
+  const clean = text ? sanitizeReactionText(text) : undefined
   const event: RoomEvent = {
     id: crypto.randomUUID(),
     type: 'reaction_sent',
     participantId: s.myId,
     nickname: useUserStore.getState().nickname,
     reaction,
+    reactionText: clean && clean.length >= 2 ? clean : undefined,
     timestamp: Date.now(),
   }
   handleEvent(event)

@@ -10,6 +10,8 @@ import { isRoomSessionActive } from '@/features/rooms/roomStore'
 import { reportSessionComplete } from '@/features/rooms/roomService'
 import { kstDateKey } from '@/lib/time/kst'
 import { sessionCompletionReward } from '@/constants/game'
+import { computeStreak, STREAK_MILESTONES } from '@/features/progression/streak'
+import { playSound } from '@/features/sound/soundEngine'
 
 /**
  * 세션 종료의 단일 진입점 — atomic 하게 한 번만 실행됩니다.
@@ -81,7 +83,20 @@ export function finalizeSession(reason: 'timer' | 'manual'): {
     }
     if (!isDemo) {
       // 출석 날짜는 KST 기준으로 통일합니다.
-      useProgressionStore.getState().completeSessionMark(kstDateKey())
+      const dateKey = kstDateKey()
+      useProgressionStore.getState().completeSessionMark(dateKey)
+      // 연속 출석 마일스톤 — 같은 날짜 중복 지급은 claimKey 가 차단합니다.
+      const prog = useProgressionStore.getState()
+      const streak = computeStreak(prog.attendance, dateKey)
+      const milestone = STREAK_MILESTONES.find((m) => m.days === streak.current)
+      if (milestone) {
+        const granted = prog.grantStreakBonus(
+          `streak-${milestone.days}:${dateKey}`,
+          milestone.points,
+          milestone.badge ? `streak-${milestone.days}` : undefined,
+        )
+        if (granted) playSound('attendance_bonus')
+      }
     }
   }
 

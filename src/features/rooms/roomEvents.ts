@@ -18,6 +18,8 @@ export interface RoomEvent {
   participantId: string
   nickname: string
   reaction?: ReactionKind
+  /** 커스텀 응원 문구 — 최대 16자, sanitize 후 Broadcast (DB 저장 없음) */
+  reactionText?: string
   timestamp: number
 }
 
@@ -42,6 +44,7 @@ const ALLOWED_KEYS = new Set([
   'participantId',
   'nickname',
   'reaction',
+  'reactionText',
   'timestamp',
 ])
 
@@ -76,14 +79,32 @@ export function sanitizeRoomEvent(raw: unknown): RoomEvent | null {
     if (!['cheer', 'reset', 'done'].includes(obj.reaction as string)) return null
   }
 
+  const reactionText =
+    typeof obj.reactionText === 'string'
+      ? sanitizeReactionText(obj.reactionText)
+      : undefined
+
   return {
     id: obj.id,
     type: obj.type as RoomEventType,
     participantId: obj.participantId,
     nickname,
     reaction: obj.reaction as ReactionKind | undefined,
+    reactionText: reactionText || undefined,
     timestamp: obj.timestamp,
   }
+}
+
+/** 응원 문구 정리 — HTML 태그·괄호·제어문자 제거, 최대 16자 */
+export function sanitizeReactionText(raw: string): string {
+  return raw
+    .replace(/<[^>]*>/g, '')
+    .replace(/[<>]/g, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 16)
 }
 
 /** 6자리 영문 대문자·숫자 방 코드 */
