@@ -125,6 +125,8 @@ npm run lint / typecheck / test / test:e2e / build
 원본 좌표·프레임은 저장하지 않는다.
 
 ### Supabase 수동 마이그레이션 필요 (라이브 DB)
-`supabase/schema.sql` 하단 V1.2 블록 — rooms.duration_seconds CHECK 를
-IN-목록에서 `between 180 and 7200` 범위로 변경. SQL Editor 에서 직접 실행
-전까지 라이브 방은 15/25/50분 외 사용자 지정 길이를 거부한다.
+`supabase/migrations/20260726_expand_room_duration.sql` 전체를 SQL Editor 에서
+실행 — rooms.duration_seconds CHECK 와 create_room 의 duration 검증을
+IN-목록에서 `between 180 and 7200` 범위로 변경한다 (멱등 — 여러 번 실행 안전,
+rollback SQL 은 파일 하단 주석). 실행 전까지 라이브 방은 15/25/50분 외
+사용자 지정 길이를 거부한다.

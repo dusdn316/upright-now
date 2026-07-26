@@ -343,8 +343,6 @@ $$;
 
 grant execute on function public.apply_room_shield(uuid, uuid, integer) to authenticated;
 
--- V1.2: 사용자 지정 세션 길이 허용 (3분 데모 180s ~ 120분 7200s)
--- 라이브 DB 에는 Supabase SQL Editor 에서 아래 블록을 직접 실행해야 합니다.
-alter table public.rooms drop constraint if exists rooms_duration_seconds_check;
-alter table public.rooms add constraint rooms_duration_seconds_check
-  check (duration_seconds between 180 and 7200);
+-- V1.2: 사용자 지정 세션 길이(180~7200초)는 별도 마이그레이션으로 적용합니다.
+-- 라이브 DB 적용: supabase/migrations/20260726_expand_room_duration.sql 전체를
+-- Supabase SQL Editor 에 붙여넣어 실행 (멱등 — 여러 번 실행해도 안전).
