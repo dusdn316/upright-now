@@ -6,7 +6,7 @@ import { applyReward } from '@/features/game/rewards'
 import { useToast } from './ToastProvider'
 import { RECOVERY_COPY } from '@/constants/copy'
 import { useCharacterVisualStore } from '@/features/posture-engine/characterVisualStore'
-import { useRoomStore } from '@/features/rooms/roomStore'
+import { isRoomSessionActive } from '@/features/rooms/roomStore'
 import { MONSTER_THEMES, getActiveModeConfig } from '@/features/modes/modeStore'
 import { reportRecovery } from '@/features/rooms/roomService'
 
@@ -56,11 +56,10 @@ export function PostureGameBridge() {
     })
 
     // 친구 방 세션 중이면 공동 보스에도 회복 에너지를 보냅니다. (성공 이벤트만 공유)
-    if (useRoomStore.getState().phase === 'running') {
+    if (isRoomSessionActive()) {
       void reportRecovery()
     }
-    const monsterName =
-      useRoomStore.getState().phase === 'running'
+    const monsterName = isRoomSessionActive()
         ? MONSTER_THEMES.komong.name
         : MONSTER_THEMES[getActiveModeConfig().monsterTheme].name
 

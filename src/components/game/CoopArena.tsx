@@ -143,7 +143,9 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
               </p>
             </>
           ) : (
-            <p className="pb-8 text-xs text-ink-soft">친구 연결 대기 중…</p>
+            <p className="pb-8 text-xs font-bold text-coral">
+              친구 연결이 끊겼어요. 다시 접속을 기다리고 있어요.
+            </p>
           )}
         </div>
       </div>

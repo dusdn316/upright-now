@@ -103,3 +103,20 @@ export const useRoomStore = create<RoomStoreState>((set) => ({
     set((s) => ({ reactions: [item, ...s.reactions].slice(0, 4) })),
   reset: () => set({ ...initialState }),
 }))
+
+import { useSessionStore } from '@/features/sessions/sessionStore'
+
+/**
+ * "지금 친구 방 세션 중"의 단일 판정 — 네 조건을 모두 요구합니다.
+ * 어느 하나라도 어긋나면(오래된 phase, sticky mode 등) 개인 세션으로 봅니다.
+ */
+export function isRoomSessionActive(): boolean {
+  const room = useRoomStore.getState()
+  const session = useSessionStore.getState()
+  return (
+    session.mode === 'room' &&
+    room.phase === 'running' &&
+    room.roomId !== null &&
+    session.sessionId === `room-${room.code ?? ''}`
+  )
+}

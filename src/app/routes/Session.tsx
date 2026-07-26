@@ -28,6 +28,7 @@ import { useDemoStore } from '@/features/demo/demoMode'
 import { finalizeSession } from '@/features/sessions/finalizeSession'
 import { featureFlags } from '@/lib/feature-flags/flags'
 import { useRoomStore } from '@/features/rooms/roomStore'
+import { leaveRoom } from '@/features/rooms/roomService'
 import { useToast } from '@/app/providers/ToastProvider'
 import { closePip, openPip, registerAutoPip } from '@/features/pip/pipController'
 import { usePipStore } from '@/features/pip/pipStore'
@@ -42,6 +43,7 @@ import { DAMAGE } from '@/constants/game'
  * 이 타이머를 취소하므로, "진짜" 화면 이탈에서만 finalize 가 실행됩니다.
  */
 let pendingUnmountFinalize: number | undefined
+let pendingRoomCleanup: number | undefined
 
 /**
  * S-09 집중 세션 — 사이드바를 숨기고 대시보드보다 단순하게 (docs/04 §3, docs/05 S-09)
@@ -132,6 +134,22 @@ export function Session() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 완료된 친구 방 세션에서 화면을 떠나면 방 상태를 정리하고 solo 로 복원합니다.
+  // (StrictMode 즉시 재마운트는 다음 마운트가 타이머를 취소해 무시됩니다)
+  useEffect(() => {
+    window.clearTimeout(pendingRoomCleanup)
+    return () => {
+      pendingRoomCleanup = window.setTimeout(() => {
+        const cur = useSessionStore.getState()
+        const room = useRoomStore.getState()
+        if (cur.status === 'completed' && cur.mode === 'room' && room.phase !== 'idle') {
+          void leaveRoom()
+          cur.configure({ mode: 'solo' })
+        }
+      }, 150)
+    }
+  }, [])
+
   // 스트레칭에서 브라우저 뒤로가기로 돌아온 경우 — 세션을 이어서 진행합니다.
   // 마운트 시 1회만: beginRest 직후(화면 전환 transition 이 끝나기 전)에
   // 상태 변화 effect 가 바로 endRest 를 해버리면 안 되기 때문입니다.
@@ -198,9 +216,16 @@ export function Session() {
 
   // 친구 방 세션 — 공동 보스 표시 + 친구 성공 이벤트·기린 싱크 알림
   const roomPhase = useRoomStore((s) => s.phase)
+  const roomId = useRoomStore((s) => s.roomId)
+  const roomCode = useRoomStore((s) => s.code)
   const lastFriendEvent = useRoomStore((s) => s.lastFriendEvent)
   const syncFlashAt = useRoomStore((s) => s.syncFlashAt)
-  const isRoomSession = roomPhase === 'running'
+  // 4중 검사 — 오래된 room 상태가 개인 세션에 협동 화면을 남기지 않게 합니다.
+  const isRoomSession =
+    session.mode === 'room' &&
+    roomPhase === 'running' &&
+    roomId !== null &&
+    sessionId === `room-${roomCode ?? ''}`
 
   useEffect(() => {
     if (!lastFriendEvent) return

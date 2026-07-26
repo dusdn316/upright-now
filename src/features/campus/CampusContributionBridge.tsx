@@ -3,7 +3,7 @@ import { featureFlags } from '@/lib/feature-flags/flags'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useDemoStore } from '@/features/demo/demoMode'
-import { useRoomStore } from '@/features/rooms/roomStore'
+import { isRoomSessionActive } from '@/features/rooms/roomStore'
 import { recordCampusContribution } from './recordContribution'
 
 /**
@@ -41,9 +41,8 @@ export function CampusContributionBridge() {
         eventId: `campus-session-${sessionId}`,
         sessionId,
       })
-      // mode 는 설정에 남아있는 값이라 sticky 합니다 — 실제 방에 연결된
-      // 세션(roomId 존재)일 때만 친구 세션 보너스를 반영합니다.
-      if (state.mode === 'room' && useRoomStore.getState().roomId !== null) {
+      // 실제 친구 방 세션(4중 검사)일 때만 친구 세션 보너스를 반영합니다.
+      if (isRoomSessionActive()) {
         void recordCampusContribution({
           kind: 'friend_session_completed',
           eventId: `campus-friend-${sessionId}`,

@@ -27,6 +27,7 @@ let channel: RealtimeChannel | null = null
 let giraffe = createGiraffeSync()
 let reconnectTimer: number | null = null
 let pollTimer: number | null = null
+let heartbeatTimer: number | null = null
 let reconnectDeadline = 0
 
 const store = () => useRoomStore.getState()
@@ -160,8 +161,27 @@ function startPolling(roomId: string): void {
   }, 3000)
 }
 
+function startHeartbeat(roomId: string): void {
+  if (heartbeatTimer) window.clearInterval(heartbeatTimer)
+  heartbeatTimer = window.setInterval(() => {
+    const phase = store().phase
+    if (phase !== 'waiting' && phase !== 'running') return
+    void (async () => {
+      const supabase = await getSupabase()
+      if (!supabase) return
+      try {
+        await supabase.rpc('heartbeat_room_member', { p_room_id: roomId })
+        await supabase.rpc('cleanup_stale_members', { p_room_id: roomId })
+      } catch {
+        /* 마이그레이션 전 — 무시 */
+      }
+    })()
+  }, 15_000)
+}
+
 function subscribeChannel(roomId: string, code: string): void {
   startPolling(roomId)
+  startHeartbeat(roomId)
   void (async () => {
     const supabase = await getSupabase()
     if (!supabase) return
@@ -438,6 +458,15 @@ export async function reportStretchComplete(): Promise<void> {
   if (typeof data === 'number') s.patch({ shield: data })
 }
 
+async function completeRoomIfDone(roomId: string): Promise<void> {
+  try {
+    const supabase = await getSupabase()
+    if (supabase) await supabase.rpc('complete_room_if_done', { p_room_id: roomId })
+  } catch {
+    /* 마이그레이션 전 — 무시 */
+  }
+}
+
 export async function reportSessionComplete(): Promise<void> {
   const s = store()
   if (!s.roomId || !s.myId) return
@@ -451,6 +480,8 @@ export async function reportSessionComplete(): Promise<void> {
   })
   await setMyState('completed')
   await applyDamageRpc(s.roomId, eventId, 'session_completed', ROOM_DAMAGE.sessionCompleted)
+  // 두 참가자 모두 completed 면 서버가 방을 completed + ended_at 처리합니다.
+  await completeRoomIfDone(s.roomId)
 }
 
 let lastReactionAt = 0
@@ -477,6 +508,8 @@ export async function leaveRoom(): Promise<void> {
   if (reconnectTimer) window.clearTimeout(reconnectTimer)
   if (pollTimer) window.clearInterval(pollTimer)
   pollTimer = null
+  if (heartbeatTimer) window.clearInterval(heartbeatTimer)
+  heartbeatTimer = null
   // 서버 쪽 멤버 행 정리 — 마지막 참가자면 방을 closed 처리하고,
   // 방장이 나가면 남은 참가자에게 방장을 넘깁니다. (leave_room RPC)
   // 마이그레이션 전(함수 없음)이나 오프라인이면 조용히 건너뜁니다.

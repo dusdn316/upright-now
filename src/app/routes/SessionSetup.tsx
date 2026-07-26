@@ -11,6 +11,8 @@ import { openPip } from '@/features/pip/pipController'
 import { LEARNING_PROFILES } from '@/constants/profiles'
 import { ROUTES } from '@/constants/routes'
 import { useSessionStore } from '@/features/sessions/sessionStore'
+import { useRoomStore } from '@/features/rooms/roomStore'
+import { leaveRoom } from '@/features/rooms/roomService'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { useCharacterStage } from '@/features/progression/progressionStore'
 import { useGameStore } from '@/features/game/gameStore'
@@ -66,6 +68,9 @@ export function SessionSetup() {
 
   const startSession = () => {
     if (calibrationRequired) return
+    // 개인 세션은 항상 solo — 이전 친구 방 상태가 남아 있으면 정리합니다.
+    if (useRoomStore.getState().phase !== 'idle') void leaveRoom()
+    configure({ mode: 'solo' })
     // 데모 모드 중에는 일반 세션을 시작하지 않습니다. (기록 오염 방지)
     if (isDemo && lengthId !== 'demo') {
       push({
@@ -154,7 +159,7 @@ export function SessionSetup() {
           </Card>
 
           <Card>
-            <CardTitle>학습 프로필</CardTitle>
+            <CardTitle>공부 환경</CardTitle>
             <div className="mt-4">
               <SegmentedControl
                 ariaLabel="학습 모드"
@@ -177,7 +182,7 @@ export function SessionSetup() {
           </Card>
 
           <Card>
-            <CardTitle>혼자 · 친구</CardTitle>
+            <CardTitle>진행 방식</CardTitle>
             <div className="mt-4">
               <SegmentedControl
                 ariaLabel="세션 모드"
@@ -189,6 +194,19 @@ export function SessionSetup() {
                     return
                   }
                   configure({ mode: id as 'solo' | 'room' })
+                  if (id === 'room') {
+                    // 친구와 함께는 기본적으로 팀플 환경 — 친구 기능을 켠
+                    // 내 모드는 그대로 유지합니다.
+                    if (!(modeConfig.kind === 'custom' && modeConfig.friendFeatures)) {
+                      if (modeConfig.id !== 'team') {
+                        setActiveMode('team')
+                        push({
+                          title: '친구와 함께는 팀플 환경으로 진행돼요.',
+                          tone: 'info',
+                        })
+                      }
+                    }
+                  }
                 }}
                 options={[
                   { id: 'solo', label: '혼자 집중', sublabel: `개인 ${MONSTER_THEMES[modeConfig.monsterTheme].name}` },
@@ -278,6 +296,10 @@ export function SessionSetup() {
               onClick={() => navigate(`${ROUTES.calibration}?return=${ROUTES.sessionSetup}`)}
             >
               자세 기준 등록
+            </Button>
+          ) : mode === 'room' ? (
+            <Button size="lg" fullWidth onClick={() => navigate(ROUTES.roomNew)}>
+              친구 방 만들기·입장하기
             </Button>
           ) : (
             <Button size="lg" fullWidth onClick={startSession}>

@@ -9,7 +9,7 @@ import { recommendStretch } from '@/features/stretch/recommend'
 import { useActiveModeConfig } from '@/features/modes/modeStore'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { applyReward } from '@/features/game/rewards'
-import { useRoomStore } from '@/features/rooms/roomStore'
+import { isRoomSessionActive } from '@/features/rooms/roomStore'
 import { reportStretchComplete } from '@/features/rooms/roomService'
 import { recordCampusContribution } from '@/features/campus/recordContribution'
 import { useToast } from '@/app/providers/ToastProvider'
@@ -112,7 +112,7 @@ export function Stretch() {
       })
       // 친구 방 공동 방어막은 세션이 실제로 진행 중일 때만 반영합니다.
       // (대기실·종료된 방에서는 방어막을 쌓을 수 없습니다)
-      if (useRoomStore.getState().phase === 'running') {
+      if (isRoomSessionActive()) {
         void reportStretchComplete()
       }
       /*
