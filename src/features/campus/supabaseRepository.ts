@@ -117,6 +117,12 @@ export class SupabaseCampusRepository implements CampusRepository {
     const supabase = await getSupabase()
     if (!supabase) throw new Error('supabase-not-configured')
     await ensureAnonymousUser()
+    // 시즌 자동 전환 — 14일 경계에서도 새 시즌·36영토가 준비됩니다.
+    try {
+      await supabase.rpc('ensure_active_campus_season')
+    } catch {
+      /* 마이그레이션 전 — 조회는 계속 진행 */
+    }
 
     const { data: seasonRow } = await supabase
       .from('campus_seasons')
@@ -267,12 +273,12 @@ export class SupabaseCampusRepository implements CampusRepository {
       학교(school_id)와 멤버 해시는 클라이언트가 보내지 않습니다:
       서버가 auth.uid() 의 campus_memberships 에서 조회해 위조를 차단합니다.
     */
+    // 점수는 서버 CASE 가 결정합니다 — 클라이언트는 종류만 보냅니다.
     const { data, error } = await supabase.rpc('apply_campus_contribution', {
       p_event_id: event.eventId,
       p_territory_id: event.tileId ?? null,
       p_session_id: event.sessionId ?? null,
       p_kind: event.kind,
-      p_points: CONTRIBUTION_POINTS[event.kind],
     })
 
     if (error) return { accepted: false, points: 0, reason: 'not_ready' }
@@ -294,6 +300,34 @@ export class SupabaseCampusRepository implements CampusRepository {
           ? 'duplicate_event'
           : 'not_ready',
     }
+  }
+
+  /** 커스텀 학교 등록/수정 — 서버가 소유권·이름 충돌을 판정합니다. */
+  async upsertCustomSchool(
+    id: string,
+    displayName: string,
+    shortName: string,
+    color: string,
+  ): Promise<'created' | 'updated' | 'name_conflict' | 'ownership_conflict' | 'invalid' | 'not_ready'> {
+    const supabase = await getSupabase()
+    if (!supabase) return 'not_ready'
+    await ensureAnonymousUser()
+    const { data, error } = await supabase.rpc('upsert_custom_school', {
+      p_id: id,
+      p_display_name: displayName,
+      p_short_name: shortName,
+      p_color: color,
+    })
+    if (error) return 'not_ready'
+    const result = (data as { result?: string } | null)?.result
+    if (
+      result === 'created' || result === 'updated' ||
+      result === 'name_conflict' || result === 'ownership_conflict' ||
+      result === 'invalid'
+    ) {
+      return result
+    }
+    return 'not_ready'
   }
 
   /** 서버 membership 갱신 — 다른 학교로의 기여 위조를 서버가 차단하는 기반 */

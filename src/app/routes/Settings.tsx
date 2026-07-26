@@ -19,8 +19,27 @@ import { resetAllData } from '@/features/settings/dataReset'
 import { sanitizeReactionText } from '@/features/rooms/roomEvents'
 import { useToast } from '@/app/providers/ToastProvider'
 import { SchoolPicker } from '@/components/campus/SchoolPicker'
+import { useCampusThemeStore } from '@/features/campus/campusThemeStore'
 import { CAMPUS_COPY } from '@/constants/campus'
 import type { Sensitivity } from '@/constants/posture'
+
+/** 서버 membership 동기화 결과 안내 — 표시 후 자동으로 비웁니다. */
+function CampusSyncNotice() {
+  const notice = useCampusThemeStore((s) => s.syncNotice)
+  const clear = useCampusThemeStore((s) => s.clearSyncNotice)
+  if (!notice) return null
+  return (
+    <p
+      role="status"
+      className="mt-2 rounded-xl bg-canvas px-3 py-2 text-xs font-semibold text-ink"
+    >
+      {notice}
+      <button type="button" className="ml-2 underline" onClick={clear}>
+        닫기
+      </button>
+    </p>
+  )
+}
 
 /** S-16 설정 — 실제 동작하는 설정 화면 */
 export function Settings() {
@@ -107,6 +126,7 @@ export function Settings() {
             <p className="mt-1 text-xs text-ink-soft">
               {`${CAMPUS_COPY.unofficialGame} ${CAMPUS_COPY.privacy}`}
             </p>
+            <CampusSyncNotice />
             <div className="mt-4">
               <SchoolPicker
                 onChanged={() =>

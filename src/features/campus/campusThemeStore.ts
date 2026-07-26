@@ -33,6 +33,9 @@ interface CampusThemePersisted {
 }
 
 interface CampusThemeState extends CampusThemePersisted {
+  /** 서버 membership 동기화 결과 안내 (Settings 에서 표시 후 비움) */
+  syncNotice: string | null
+  clearSyncNotice: () => void
   /** 학교를 고르거나 바꿉니다. 제한에 걸리면 상태를 바꾸지 않습니다. */
   selectSchool: (schoolId: string, now?: number) => SchoolChangeDecision
   /** 기타 / 직접 설정의 색만 바꿉니다. 학교 변경 제한과 무관합니다. */
@@ -83,6 +86,8 @@ function historyOf(state: CampusThemePersisted): SchoolChangeHistory {
 }
 
 export const useCampusThemeStore = create<CampusThemeState>((set, get) => ({
+  syncNotice: null,
+  clearSyncNotice: () => set({ syncNotice: null }),
   ...initialState,
   ...persisted,
   // 구버전 저장분 가드 — 신규 필드 undefined 방지
@@ -105,6 +110,17 @@ export const useCampusThemeStore = create<CampusThemeState>((set, get) => ({
   selectSchool: (schoolId, now = Date.now()) => {
     const decision = get().checkChange(schoolId, now)
     if (!decision.allowed) return decision
+    // 서버가 거부하면 되돌릴 이전 상태
+    const prevSnapshot: CampusThemePersisted = {
+      schoolId: get().schoolId,
+      customColor: get().customColor,
+      customSchoolName: get().customSchoolName,
+      customSchoolShortName: get().customSchoolShortName,
+      lastChangedAt: get().lastChangedAt,
+      lastChangedSeasonId: get().lastChangedSeasonId,
+      changesInSeason: get().changesInSeason,
+      targetTileId: get().targetTileId,
+    }
 
     const season = seasonAt(now)
     const nextHistory = applySchoolChange(historyOf(get()), schoolId, season.id, now)
@@ -120,11 +136,26 @@ export const useCampusThemeStore = create<CampusThemeState>((set, get) => ({
     set(next)
     persist(next)
     /*
-      Supabase 저장소가 켜져 있으면 서버 membership 도 동기화합니다.
-      기여 위조 방지의 최종 판정은 서버(select_campus_school + memberships)가
-      담당하고, 여기 로컬 제한은 UX 안내용입니다. (순환 import 방지: 동적 로드)
+      Supabase 저장소가 켜져 있으면 서버 membership 이 최종 판정입니다.
+      서버가 change_limit / not_ready 를 돌려주면 로컬 선택을 원복하고
+      안내 문구(syncNotice)를 남깁니다. mock 은 'unchanged' 로 통과합니다.
     */
-    void import('./campusStore').then((m) => m.syncSchoolSelection(schoolId))
+    const before = { ...prevSnapshot }
+    void import('./campusStore').then(async (m) => {
+      const result = await m.syncSchoolSelection(schoolId)
+      if (result === 'change_limit' || result === 'not_ready') {
+        persist(before)
+        set({
+          ...before,
+          syncNotice:
+            result === 'change_limit'
+              ? '이번 시즌 학교 변경 횟수를 다 썼어요. 다음 시즌에 바꿀 수 있어요.'
+              : '서버에 학교 선택을 저장하지 못했어요. 이전 학교를 유지할게요.',
+        })
+      } else if (result === 'selected' || result === 'changed') {
+        set({ syncNotice: '학교 선택이 서버에 저장됐어요.' })
+      }
+    })
     return decision
   },
 

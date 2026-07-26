@@ -4,7 +4,7 @@ import { parseFlag } from '@/lib/feature-flags/flags'
 import { MockCampusRepository, type CampusIdentity } from './mockRepository'
 import { SupabaseCampusRepository } from './supabaseRepository'
 import { getCampusMemberId } from './identity'
-import { useCampusThemeStore } from './campusThemeStore'
+import { customSchoolStableKey, useCampusThemeStore } from './campusThemeStore'
 import { rankStandings } from './contribution'
 import { seasonAt } from './season'
 import { createSeasonMap } from './campusMap'
@@ -175,7 +175,33 @@ export function selectMyTileCount(state: CampusStoreState, schoolId: string | nu
   return state.snapshot.tiles.filter((t) => t.ownerSchoolId === schoolId).length
 }
 
-/** 학교 선택을 서버 membership 에 동기화 — supabase 저장소일 때만 동작 */
-export function syncSchoolSelection(schoolId: string): void {
-  void repository?.selectSchool?.(schoolId)
+/**
+ * 학교 선택을 서버 membership 에 동기화합니다.
+ * - mock 저장소: 서버가 없으므로 항상 'unchanged' (로컬 제한만 사용)
+ * - supabase: 커스텀 학교면 stable key 로 먼저 서버 등록 후 membership 선택.
+ *   서버 결과(change_limit 등)를 그대로 돌려 로컬 확정/롤백에 사용합니다.
+ */
+export async function syncSchoolSelection(
+  schoolId: string,
+): Promise<'selected' | 'changed' | 'unchanged' | 'change_limit' | 'not_ready'> {
+  if (!repository || repository.kind !== 'supabase') return 'unchanged'
+  const repo = repository as import('./supabaseRepository').SupabaseCampusRepository
+
+  let serverSchoolId = schoolId
+  if (schoolId === 'custom') {
+    const theme = useCampusThemeStore.getState()
+    const name = theme.customSchoolName || '직접 설정 학교'
+    const key = customSchoolStableKey(name)
+    const upserted = await repo.upsertCustomSchool(
+      key,
+      name,
+      theme.customSchoolShortName || name.slice(0, 8),
+      theme.customColor,
+    )
+    if (upserted === 'ownership_conflict' || upserted === 'invalid') {
+      return 'not_ready'
+    }
+    serverSchoolId = key
+  }
+  return (await repo.selectSchool?.(serverSchoolId)) ?? 'not_ready'
 }
