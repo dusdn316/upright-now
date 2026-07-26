@@ -48,6 +48,7 @@ const ASSET_TO_SVG: Record<CharacterAssetState, CharacterVisualState> = {
   recover: 'recover',
   attack: 'recover',
   away: 'away',
+  unstable: 'idle',
 }
 
 export function CharacterViewport({
@@ -131,9 +132,17 @@ export function CharacterViewport({
 
   return (
     <figure
-      className={`relative m-0 shrink-0 ${dimClass} ${className}`}
+      className={[
+        'relative m-0 shrink-0',
+        // 상태 연출은 별도 이미지가 아니라 CSS 로 — index.css char-state-*
+        `char-state-${assetState}`,
+        `char-stage-${stage}`,
+        dimClass,
+        className,
+      ].join(' ')}
       style={{ width: size, height: size }}
       data-asset-state={resolved ? resolved.state : 'svg-fallback'}
+      data-visual-state={assetState}
     >
       {current ? (
         <>

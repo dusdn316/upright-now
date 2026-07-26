@@ -37,6 +37,7 @@ import { CoopArena } from '@/components/game/CoopArena'
 import { useAttackSequence } from '@/features/game/useAttackSequence'
 import { MONSTER_THEMES, useActiveModeConfig } from '@/features/modes/modeStore'
 import { DAMAGE, FOCUS_ATTACK_INTERVAL_MS } from '@/constants/game'
+import { useMonsterProgress } from '@/features/game/monsterProgress'
 
 /**
  * 언마운트 안전망 타이머 — StrictMode 의 즉시 재마운트에서는 다음 마운트가
@@ -251,6 +252,9 @@ export function Session() {
   // 공격 연출 3.2초: 회복 0~0.7 → 에너지 0.7~1.4 → 피격 1.4~2.5 → 보상 2.5~3.2
   const { energyActive, bossHitTick, rewardFlash } = useAttackSequence(game.attackTick)
   const modeConfig = useActiveModeConfig()
+  const monsterPhase = useMonsterProgress((s) =>
+    isRoomSession ? 1 : s.getBoss(modeConfig.monsterTheme).phase,
+  )
   const monsterName = isRoomSession
     ? MONSTER_THEMES.komong.name
     : MONSTER_THEMES[modeConfig.monsterTheme].name
@@ -534,6 +538,8 @@ export function Session() {
                   attackTick={bossHitTick}
                   name={monsterName}
                   damage={DAMAGE.recovery}
+                  monsterTheme={isRoomSession ? 'komong' : modeConfig.monsterTheme}
+                  monsterPhase={monsterPhase}
                 />
               </div>
             </>

@@ -1,4 +1,5 @@
 import { CharacterViewport } from '@/components/character/CharacterViewport'
+import { MonsterViewport } from './MonsterViewport'
 import { Icon } from '@/components/ui/Icon'
 import { Progress } from '@/components/ui'
 import { getShopItem } from '@/constants/storeItems'
@@ -101,14 +102,21 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
         <div className="flex w-[150px] flex-col items-center" data-testid="coop-boss">
           <div
             className={[
-              'flex h-20 w-20 items-center justify-center rounded-2xl border-2 text-3xl',
+              'flex h-24 w-24 items-center justify-center rounded-2xl border-2',
               ratio <= 0 ? 'border-line bg-canvas' : 'border-coral bg-pink-soft',
-              bossHitTick > 0 ? 'anim-boss-shake-key' : '',
             ].join(' ')}
-            key={bossHitTick}
             aria-hidden="true"
           >
-            {ratio <= 0 ? '🎉' : '📚'}
+            {ratio <= 0 ? (
+              <span className="text-3xl">🎉</span>
+            ) : (
+              <MonsterViewport
+                theme="komong"
+                phase={1}
+                hitTick={bossHitTick}
+                size={80}
+              />
+            )}
           </div>
           <p className="mt-1 text-center text-xs font-bold text-ink">{theme.name}</p>
           <div className="mt-1 w-full">

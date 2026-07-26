@@ -112,6 +112,21 @@ const FIGURES: Record<string, React.ReactNode> = {
   ),
 }
 
+const CARD_ID_MAP: Record<string, string> = {
+  'shoulder-roll': 'shoulder-roll',
+  'scapular-squeeze': 'scapular-squeeze',
+  'wrist-forearm': 'wrist-forearm',
+  'seated-twist': 'seated-torso-rotation',
+  'neck-turn': 'neck-side-movement',
+  'calf-raise': 'calf-raise',
+}
+
+/** 승인 카드 이미지 경로 — 없으면 기존 SVG 폴백 */
+export function stretchCardSrc(routineId: string): string | null {
+  const card = CARD_ID_MAP[routineId]
+  return card ? `/assets/stretch/cards/${card}.webp` : null
+}
+
 export function StretchFigure({ routineId }: { routineId: string }) {
   return (
     <div className="flex h-40 w-40 items-center justify-center rounded-full bg-surface">

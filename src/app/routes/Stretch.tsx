@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AppShell, PageHeader } from '@/components/layout/AppShell'
 import { Button, Card, Progress } from '@/components/ui'
-import { StretchFigure } from '@/components/stretch/StretchFigure'
+import { StretchFigure, stretchCardSrc } from '@/components/stretch/StretchFigure'
 import { STRETCH_SAFETY } from '@/constants/copy'
 import { ROUTES } from '@/constants/routes'
 import { recommendStretch } from '@/features/stretch/recommend'
@@ -64,6 +64,9 @@ export function Stretch() {
   const [remaining, setRemaining] = useState(routine.durationSec)
   const [paused, setPaused] = useState(false)
   const [done, setDone] = useState(false)
+  const [zoomed, setZoomed] = useState(false)
+  const [cardBroken, setCardBroken] = useState(false)
+  const cardSrc = stretchCardSrc(routine.id)
 
   useEffect(() => {
     if (paused || done) return
@@ -86,6 +89,8 @@ export function Stretch() {
     const next = recommendStretch(stretchPref, prevIdRef.current)
     prevIdRef.current = next.id
     setRoutine(next)
+    setCardBroken(false)
+    setZoomed(false)
     setRemaining(next.durationSec)
     setPaused(false)
     setDone(false)
@@ -166,7 +171,43 @@ export function Stretch() {
       <div className="mx-auto max-w-xl">
         <Card tone="green">
           <div className="flex flex-col items-center gap-4 text-center">
-            <StretchFigure routineId={routine.id} />
+            {cardSrc && !cardBroken ? (
+              <button
+                type="button"
+                onClick={() => setZoomed(true)}
+                aria-label={`${routine.name} 카드 크게 보기`}
+                className="group relative w-full max-w-sm overflow-hidden rounded-2xl border border-line"
+              >
+                <img
+                  src={cardSrc}
+                  alt={`${routine.name} 동작 카드`}
+                  onError={() => setCardBroken(true)}
+                  className="h-auto w-full"
+                />
+                <span className="absolute right-2 bottom-2 rounded-lg bg-ink/70 px-2 py-0.5 text-[11px] font-bold text-white group-hover:bg-ink">
+                  확대
+                </span>
+              </button>
+            ) : (
+              <StretchFigure routineId={routine.id} />
+            )}
+            {zoomed && cardSrc && (
+              <div
+                role="dialog"
+                aria-label={`${routine.name} 카드 확대`}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-6"
+                onClick={() => setZoomed(false)}
+              >
+                <img src={cardSrc} alt={`${routine.name} 동작 카드 확대`} className="max-h-full max-w-full rounded-2xl" />
+                <button
+                  type="button"
+                  className="absolute top-4 right-4 rounded-xl bg-surface px-3 py-1.5 text-sm font-bold text-ink"
+                  onClick={() => setZoomed(false)}
+                >
+                  닫기
+                </button>
+              </div>
+            )}
             <h2 className="text-xl font-bold text-ink">{routine.name}</h2>
             <p className="text-sm text-ink-soft">{routine.note}</p>
 

@@ -16,3 +16,8 @@ incoming-assets
 
 .vercel
 .env*
+
+# 승인 에셋 원본(ZIP)과 임시 해제 폴더 — Git 추적 제외
+asset-drop/
+.tmp-assets/
+incoming-assets/

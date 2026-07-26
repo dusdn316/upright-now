@@ -66,31 +66,38 @@ export function TerritoryMap({
   const [bgBroken, setBgBroken] = useState(false)
 
   return (
-    <div data-testid="territory-map" className="relative w-full min-w-0">
+    <div
+      data-testid="territory-map"
+      className="relative w-full min-w-0 overflow-auto"
+      style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
+    >
       <p className="sr-only">{`가상 캠퍼스 섬 지도 (territory ${ordered.length}곳)`}</p>
       <svg
-        viewBox="0 0 120 84"
+        viewBox="0 0 1536 1024"
         className="h-auto w-full"
         aria-label="가상 캠퍼스 섬 지도"
       >
         {/* 배경 — 최종 이미지는 별도 제작 후 교체 (없으면 자체 SVG 섬) */}
         {!bgBroken ? (
           <image
-            href="/assets/campus/campus-map-bg.webp"
+            href="/assets/campus/campus-map-bg-1024.webp"
             x="0"
             y="0"
-            width="120"
-            height="84"
+            width="1536"
+            height="1024"
             preserveAspectRatio="xMidYMid slice"
             onError={() => setBgBroken(true)}
           />
         ) : null}
+        {/* 배경의 네모 칸은 장식 — 실제 클릭 영역은 아래 불규칙 polygon */}
         <path
-          d="M 12 40 C 8 22 26 8 48 7 C 74 5 106 12 112 32 C 118 52 102 74 74 78 C 46 82 16 70 12 48 Z"
+          d="M 154 488 C 102 268 333 98 614 90 C 947 66 1357 146 1434 390 C 1510 634 1306 902 947 950 C 589 998 205 854 154 585 Z"
           fill={bgBroken ? '#EAE4D3' : 'transparent'}
-          stroke="#D9D1BE"
-          strokeWidth="1.2"
+          stroke={bgBroken ? '#D9D1BE' : 'transparent'}
+          strokeWidth="10"
         />
+        {/* islandMap 좌표계(120×84)를 배경 해상도(1536×1024)로 스케일 */}
+        <g transform="scale(12.8, 12.190476)">
         {ordered.map((tile) => {
         const status = tileStatus(tile)
         const owner = colorOf(tile.ownerSchoolId)
@@ -142,6 +149,7 @@ export function TerritoryMap({
               }}
               points={shape.points}
               fill={owner ?? ZONE_TINT[tile.zone] ?? '#EFE9DC'}
+              fillOpacity={owner ? (isMine ? 0.52 : 0.34) : 0.28}
               stroke={
                 status === 'contested'
                   ? (challenger ?? '#FF6464')
@@ -188,6 +196,7 @@ export function TerritoryMap({
           </g>
         )
       })}
+        </g>
       </svg>
     </div>
   )

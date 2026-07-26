@@ -5,8 +5,10 @@ import type { CharacterStage, PostureState } from '@/types'
  * 캐릭터 이미지 경로의 단일 소스 — docs/10 §7, docs/18 §10
  * 컴포넌트 안에 파일 경로를 하드코딩하지 않습니다.
  *
- * 원본: incoming-assets/*.png (1024x1024, 투명 배경)
- * 변환: node scripts/convert-characters.mjs → public/assets/characters/
+ * 원본: 승인 디자인 팩 (asset-drop, 얼굴·비율·색상 변경 금지)
+ * 변환: npm run assets:import → public/assets/characters/stages/
+ * 상태(warning·slouch·recover·attack·away·unstable)는 별도 이미지가 아니라
+ * 기본 idle 이미지 + CSS 연출(index.css 의 char-state-*)로 표현합니다.
  */
 export type CharacterAssetState =
   | 'idle'
@@ -15,6 +17,7 @@ export type CharacterAssetState =
   | 'recover'
   | 'attack'
   | 'away'
+  | 'unstable'
 
 /** 세션 중 캐릭터가 취하는 표현 (자세 상태와 별개로 게임이 지정) */
 export type CharacterVisualIntent = 'idle' | 'recover' | 'attack'
@@ -25,24 +28,17 @@ export const CHARACTER_ASSETS: Record<
   CharacterStage,
   Partial<Record<CharacterAssetState, string>>
 > = {
-  1: {
-    idle: `${BASE}/stage-01/idle.webp`,
-    warning: `${BASE}/stage-01/warning.webp`,
-    slouch: `${BASE}/stage-01/slouch.webp`,
-    recover: `${BASE}/stage-01/recover.webp`,
-    attack: `${BASE}/stage-01/attack.webp`,
-  },
-  2: { idle: `${BASE}/stage-02/idle.webp` },
-  3: {
-    idle: `${BASE}/stage-03/idle.webp`,
-    warning: `${BASE}/stage-03/warning.webp`,
-    slouch: `${BASE}/stage-03/slouch.webp`,
-    recover: `${BASE}/stage-03/recover.webp`,
-    attack: `${BASE}/stage-03/attack.webp`,
-  },
-  4: { idle: `${BASE}/stage-04/idle.webp` },
-  5: { idle: `${BASE}/stage-05/idle.webp` },
-  6: { idle: `${BASE}/stage-06/idle.webp` },
+  1: { idle: `${BASE}/stages/stage-01/idle-512.webp` },
+  2: { idle: `${BASE}/stages/stage-02/idle-512.webp` },
+  3: { idle: `${BASE}/stages/stage-03/idle-512.webp` },
+  4: { idle: `${BASE}/stages/stage-04/idle-512.webp` },
+  5: { idle: `${BASE}/stages/stage-05/idle-512.webp` },
+  6: { idle: `${BASE}/stages/stage-06/idle-512.webp` },
+}
+
+/** 큰 화면(성장 타임라인 확대 등)용 1024 변형 */
+export function characterAssetLarge(stage: CharacterStage): string {
+  return `${BASE}/stages/stage-${String(stage).padStart(2, '0')}/idle-1024.webp`
 }
 
 /** 자세 상태 → 에셋 상태 */
@@ -51,7 +47,7 @@ const POSTURE_TO_ASSET: Record<PostureState, CharacterAssetState> = {
   warning: 'warning',
   bad: 'slouch',
   away: 'away',
-  unstable: 'idle',
+  unstable: 'unstable',
 }
 
 /**
@@ -106,6 +102,7 @@ const STATE_DESCRIPTION: Record<CharacterAssetState, string> = {
   recover: '자세를 회복하는 모습',
   attack: '회복 에너지로 특수 공격을 하는 모습',
   away: '자리를 비운 사이 기다리는 모습',
+  unstable: '측정이 잠시 흔들리는 모습',
 }
 
 /** 이미지가 뜻을 전달하므로 상태까지 담은 대체 텍스트를 만듭니다. (docs/10 §9) */
