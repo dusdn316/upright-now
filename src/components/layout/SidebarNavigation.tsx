@@ -33,9 +33,14 @@ export function SidebarNavigation() {
           <p className="flex items-center gap-1.5 truncate text-sm font-bold text-ink">
             {nickname}
             {isDemo && (
-              <span className="rounded-full bg-blue-soft px-1.5 py-0.5 text-[10px] font-bold text-[#2b52a8]">
-                데모
-              </span>
+              <button
+                type="button"
+                title="데모를 끝내고 내 데이터로 돌아갑니다"
+                onClick={() => useDemoStore.getState().disableDemo()}
+                className="rounded-full bg-blue-soft px-1.5 py-0.5 text-[10px] font-bold text-[#2b52a8] hover:bg-blue-soft/70"
+              >
+                데모 종료
+              </button>
             )}
           </p>
           <p className="truncate text-[11px] text-ink-soft">

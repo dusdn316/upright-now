@@ -37,6 +37,27 @@ describe('데모 값과 실제 사용자 값 분리', () => {
     expect(useProgressionStore.getState().points).toBe(0)
     expect(useUserStore.getState().hasOnboarded).toBe(false)
   })
+
+  it('기존 사용자 데이터가 있으면 데모 종료 시 그대로 복원된다', () => {
+    // 실제 사용자: XP 350 · 120P · 닉네임 수현
+    useProgressionStore.setState({ xp: 350, points: 120 })
+    useUserStore.setState({
+      nickname: '수현',
+      hasOnboarded: true,
+      hasCalibration: false,
+    })
+
+    useDemoStore.getState().enableDemo()
+    expect(useProgressionStore.getState().xp).toBe(DEMO_PROGRESSION.xp)
+    expect(useUserStore.getState().nickname).toBe(DEMO_NICKNAME)
+
+    useDemoStore.getState().disableDemo()
+    expect(useProgressionStore.getState().xp).toBe(350)
+    expect(useProgressionStore.getState().points).toBe(120)
+    expect(useUserStore.getState().nickname).toBe('수현')
+    expect(useUserStore.getState().hasOnboarded).toBe(true)
+    expect(useUserStore.getState().hasCalibration).toBe(false)
+  })
 })
 
 describe('hasDemoQuery', () => {

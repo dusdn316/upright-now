@@ -159,9 +159,26 @@ test.describe('실제 2인 친구 방', () => {
       await expect(bubble).toContainText('조금만 더', { timeout: 10_000 })
     }
 
-    // A 스트레칭 완료 → 공동 방어막 +15 (B 화면에서 확인)
+    // A 스트레칭: 타이머가 0초가 된 뒤 '완료하고 돌아가기'를 눌러야만
+    // 보상·공동 방어막 +15 가 적용됩니다. (배속으로 타이머만 빨리 돌림)
+    await pageA.evaluate(() => {
+      ;(window as unknown as { __upright?: { setTimeScale(s: number): void } })
+        .__upright?.setTimeScale(50)
+    })
     await pageA.getByRole('button', { name: '잠깐 스트레칭' }).click()
-    await pageA.getByRole('button', { name: '완료' }).click()
+    // 완주 전에는 완료 버튼이 없어야 합니다.
+    await expect(
+      pageA.getByRole('button', { name: '그만하고 돌아가기' }),
+    ).toBeVisible()
+    const completeStretch = pageA.getByRole('button', {
+      name: '완료하고 돌아가기',
+    })
+    await expect(completeStretch).toBeVisible({ timeout: 20_000 })
+    await completeStretch.click()
+    await pageA.evaluate(() => {
+      ;(window as unknown as { __upright?: { setTimeScale(s: number): void } })
+        .__upright?.setTimeScale(1)
+    })
     await expect(pageB.getByText(/방어막 15/)).toBeVisible({ timeout: 20_000 })
 
     // 카메라 영상·프레임·랜드마크·bad 상태 전송 0건

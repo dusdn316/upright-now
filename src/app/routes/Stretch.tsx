@@ -14,8 +14,6 @@ import { reportStretchComplete } from '@/features/rooms/roomService'
 import { useToast } from '@/app/providers/ToastProvider'
 import type { StretchRoutine } from '@/types'
 
-let attemptSeq = 0
-
 /**
  * 스트레칭 출발 경로 — 어디서 왔는지에 따라 복귀 목적지가 달라집니다.
  * - active-session: 세션 중 휴식. 같은 세션으로 돌아가고 finalize 하지 않습니다.
@@ -48,20 +46,17 @@ export function Stretch() {
   const originSessionId = locationState.sessionId
   const prevIdRef = useRef<string | undefined>(undefined)
   /**
-   * 완료 보상 이벤트 id — 시도(동작 시작)마다 한 번만 만들어,
-   * 같은 완료가 두 번 보상되지 않게 합니다. (applyReward 가 id 로 중복 차단)
+   * 스트레칭 방문(stretchSessionId) 단위 보상 id — 화면 진입 시 1회만 발급.
+   * 다시 시작·다른 동작을 반복해도 같은 id 라 보상은 정확히 1회입니다.
+   * 새로고침하면 타이머가 처음부터라 완주 전 보상 자체가 없습니다.
    */
-  const attemptIdRef = useRef('')
-
-  const newAttempt = (routineId: string) => {
-    attemptSeq += 1
-    attemptIdRef.current = `stretch-${useSessionStore.getState().sessionId}-${routineId}-${attemptSeq}`
-  }
+  const stretchSessionIdRef = useRef(
+    `stretch-${useSessionStore.getState().sessionId || 'standalone'}-${Date.now()}`,
+  )
 
   const [routine, setRoutine] = useState<StretchRoutine>(() => {
     const first = recommendStretch(profileId)
     prevIdRef.current = first.id
-    newAttempt(first.id)
     return first
   })
   const [remaining, setRemaining] = useState(routine.durationSec)
@@ -71,18 +66,23 @@ export function Stretch() {
   useEffect(() => {
     if (paused || done) return
     if (remaining <= 0) {
-      finish()
+      // 타이머 0초 = 완주. 보상은 여기서 주지 않고,
+      // 사용자가 '완료하고 돌아가기'를 직접 눌러야 지급됩니다.
+      setDone(true)
       return
     }
-    const t = window.setTimeout(() => setRemaining((r) => r - 1), 1000)
+    // QA 시간 배속(setTimeScale)을 존중합니다. 실사용 기본은 1초.
+    const scale = Math.max(1, useSessionStore.getState().timeScale)
+    const t = window.setTimeout(
+      () => setRemaining((r) => r - 1),
+      Math.max(20, Math.round(1000 / scale)),
+    )
     return () => window.clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remaining, paused, done])
 
   const pickAnother = () => {
     const next = recommendStretch(profileId, prevIdRef.current)
     prevIdRef.current = next.id
-    newAttempt(next.id)
     setRoutine(next)
     setRemaining(next.durationSec)
     setPaused(false)
@@ -90,19 +90,16 @@ export function Stretch() {
   }
 
   const restart = () => {
-    // 같은 동작을 처음부터 — 새 시도로 취급합니다.
-    newAttempt(routine.id)
     setRemaining(routine.durationSec)
     setPaused(false)
     setDone(false)
   }
 
-  const finish = () => {
-    if (done) return
-    setDone(true)
-    // 완료 보상 — 반드시 applyReward 를 통해서만. 같은 시도는 1회만 적립됩니다.
+  /** 완주(타이머 0초) 후 '완료하고 돌아가기' — 이때만, 방문당 1회만 보상 */
+  const completeAndExit = () => {
+    if (!done) return
     const outcome = applyReward({
-      id: attemptIdRef.current,
+      id: stretchSessionIdRef.current,
       sessionId: useSessionStore.getState().sessionId,
       type: 'stretch_completed',
     })
@@ -112,11 +109,13 @@ export function Stretch() {
         description: `+${outcome.xp} XP · +${outcome.points}P`,
         tone: 'success',
       })
-      // 친구 방이면 공동 방어막에도 반영합니다.
-      if (useRoomStore.getState().roomId) {
+      // 친구 방 공동 방어막은 세션이 실제로 진행 중일 때만 반영합니다.
+      // (대기실·종료된 방에서는 방어막을 쌓을 수 없습니다)
+      if (useRoomStore.getState().phase === 'running') {
         void reportStretchComplete()
       }
     }
+    exitToOrigin()
   }
 
   const progress = 1 - remaining / routine.durationSec
@@ -138,13 +137,6 @@ export function Stretch() {
     }
     navigate(ROUTES.home)
   }
-
-  const exitLabel =
-    origin === 'active-session'
-      ? '세션으로 돌아가기'
-      : origin === 'result'
-        ? '결과로 돌아가기'
-        : '홈으로'
 
   return (
     <AppShell chrome="focus">
@@ -178,7 +170,7 @@ export function Stretch() {
           </div>
 
           <div className="mt-6 flex flex-wrap justify-center gap-2">
-            {!done && (
+            {!done ? (
               <>
                 <Button size="sm" variant="secondary" onClick={() => setPaused((p) => !p)}>
                   {paused ? '이어서' : '잠시 멈춤'}
@@ -189,23 +181,15 @@ export function Stretch() {
                 <Button size="sm" variant="secondary" onClick={pickAnother}>
                   다른 동작
                 </Button>
-                <Button size="sm" onClick={finish}>
-                  완료
+                <Button size="sm" variant="ghost" onClick={exitToOrigin}>
+                  그만하고 돌아가기
                 </Button>
               </>
-            )}
-            {done && (
-              <Button size="sm" variant="secondary" onClick={pickAnother}>
-                다른 동작 보기
+            ) : (
+              <Button size="sm" onClick={completeAndExit}>
+                완료하고 돌아가기
               </Button>
             )}
-            <Button
-              size="sm"
-              variant={done ? 'primary' : 'ghost'}
-              onClick={exitToOrigin}
-            >
-              {done ? exitLabel : '건너뛰기'}
-            </Button>
           </div>
         </Card>
 

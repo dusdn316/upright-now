@@ -81,6 +81,9 @@ export function Session() {
   // 실제 카메라 자세 감지: 카메라 기능이 켜지고, 기준이 등록됐고, 데모가 아닐 때만.
   const useRealCamera =
     featureFlags.camera && hasCalibration && hasProfile && !isDemo
+
+  // 비데모 세션은 자세 기준 없이는 시작할 수 없습니다. (3분 데모만 예외)
+  const calibrationRequired = featureFlags.camera && !isDemo && !hasProfile
   const { state: camera, start: startCamera, stop: stopCamera } =
     useCamera(videoRef)
   useLiveClassifier(videoRef, camera)
@@ -115,6 +118,17 @@ export function Session() {
     stopCamera()
     closePip() // 세션이 끝나면 PiP·미니 위젯을 자동으로 닫습니다
   }, [session.status, stopCamera])
+
+  // 유효하지 않은 세션 URL — 데모가 아니고, 이 화면이 아는 세션도 아니면
+  // (직접 주소 입력·새로고침) 가짜 세션을 만들지 않고 설정 화면으로 복구합니다.
+  useEffect(() => {
+    if (isDemo || sessionId === 'demo') return
+    const s = useSessionStore.getState()
+    if (s.status === 'idle' && s.sessionId !== sessionId) {
+      navigate(ROUTES.sessionSetup, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 스트레칭에서 브라우저 뒤로가기로 돌아온 경우 — 세션을 이어서 진행합니다.
   // 마운트 시 1회만: beginRest 직후(화면 전환 transition 이 끝나기 전)에
@@ -303,7 +317,23 @@ export function Session() {
         <PostureStatusBadge state={snapshot.state} quality={snapshot.quality} />
       </header>
 
-      {session.status === 'idle' && (
+      {session.status === 'idle' && calibrationRequired && (
+        <Card tone="yellow" className="mb-4 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-ink-soft">
+              자세 기준을 먼저 등록해야 세션을 시작할 수 있어요. 1분이면 돼요.
+            </p>
+            <Button
+              size="sm"
+              onClick={() => navigate(`${ROUTES.calibration}?return=${ROUTES.session(sessionId)}`)}
+            >
+              자세 기준 등록
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {session.status === 'idle' && !calibrationRequired && (
         <Card tone="blue" className="mb-4 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-ink-soft">
@@ -312,6 +342,7 @@ export function Session() {
             <Button
               size="sm"
               onClick={() => {
+                if (calibrationRequired) return
                 useGameStore.getState().reset()
                 session.start(sessionId)
                 // PiP 는 사용자 제스처 필요 — 같은 click handler 에서 요청

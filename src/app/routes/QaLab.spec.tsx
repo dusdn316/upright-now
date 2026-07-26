@@ -23,6 +23,10 @@ function resetAll() {
   useGameStore.getState().reset()
   usePostureStore.getState().reset()
   useDemoStore.getState().disableDemo()
+  // disableDemo 는 이제 "데모 진입 전 상태 복원"이라, 테스트 격리를 위해
+  // 사용자·성장 스토어를 명시적으로 초기화합니다.
+  useProgressionStore.getState().reset()
+  useUserStore.getState().reset()
   resetRewardsForTest()
 }
 
@@ -117,10 +121,10 @@ describe('대시보드', () => {
     expect(screen.queryByText('데모 기린')).not.toBeInTheDocument()
   })
 
-  it('데모 모드에서만 데모 배지를 보여준다', () => {
+  it('데모 모드에서만 데모 종료 버튼을 보여준다', () => {
     useDemoStore.getState().enableDemo()
     renderAt('/')
 
-    expect(screen.getByText('데모')).toBeInTheDocument()
+    expect(screen.getByText('데모 종료')).toBeInTheDocument()
   })
 })

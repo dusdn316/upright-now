@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell, PageHeader } from '@/components/layout/AppShell'
 import { CharacterViewport } from '@/components/character/CharacterViewport'
 import { GrowthTimeline } from '@/components/character/GrowthTimeline'
@@ -16,6 +16,8 @@ import {
 } from '@/features/progression/progressionStore'
 import { applyReward } from '@/features/game/rewards'
 import { useToast } from '@/app/providers/ToastProvider'
+import { useSessionHistoryStore } from '@/features/sessions/sessionHistoryStore'
+import { useDemoStore } from '@/features/demo/demoMode'
 
 /**
  * S-12 결과 — docs/05, docs/03 UF-12
@@ -23,12 +25,82 @@ import { useToast } from '@/app/providers/ToastProvider'
  */
 export function Result() {
   const navigate = useNavigate()
+  const { sessionId: paramId = 'demo' } = useParams()
   const stage = useCharacterStage()
   const xp = useProgressionStore((s) => s.xp)
   const session = useSessionStore()
   const game = useGameStore()
+  const summaries = useSessionHistoryStore((s) => s.summaries)
+  const isDemo = useDemoStore((s) => s.isDemo)
   const [progress, setProgress] = useState<string | null>(null)
   const { push } = useToast()
+
+  // URL 의 세션 id 를 실제로 검증합니다.
+  // - 현재 세션 id 와 일치(또는 데모) → 현재 결과
+  // - 과거 세션 id → 기록에서 조회해 표시
+  // - 둘 다 아니면 가짜 0초 결과를 만들지 않고 '결과를 찾을 수 없어요'
+  const isCurrent =
+    isDemo || (session.sessionId === paramId && session.status !== 'idle')
+  const pastSummary = isCurrent
+    ? undefined
+    : summaries.find((s) => s.sessionId === paramId || s.id === paramId)
+
+  if (!isCurrent && pastSummary) {
+    const past = pastSummary
+    return (
+      <AppShell chrome="focus">
+        <PageHeader
+          back={() => navigate(ROUTES.history)}
+          title="지난 세션 결과"
+          description={new Date(past.endedAt).toLocaleString('ko-KR')}
+          action={
+            <Badge tone={past.status === 'completed' ? 'green' : 'muted'}>
+              {past.status === 'completed' ? '완료' : '중도 종료'}
+            </Badge>
+          }
+        />
+        <Card>
+          <CardTitle>자세 요약</CardTitle>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <StatTile label="학습 세션 시간" value={formatDuration(past.elapsedMs)} tone="canvas" />
+            <StatTile label="감지 가능 시간" value={formatDuration(past.detectableMs)} tone="canvas" />
+            <StatTile
+              label="회복 성공 / 회복 기회"
+              value={`${past.recoveries} / ${past.recoveryOpportunities}`}
+              tone="canvas"
+            />
+            <StatTile label="최고 콤보" value={String(past.bestCombo)} unit="회" tone="canvas" />
+            <StatTile label="몬스터 피해량" value={String(past.damageDealt)} tone="canvas" />
+            <StatTile label="획득" value={`${past.xpEarned} XP · ${past.pointsEarned}P`} tone="canvas" />
+          </div>
+        </Card>
+        <div className="mt-4 flex gap-2">
+          <Button variant="secondary" onClick={() => navigate(ROUTES.history)}>
+            기록 보기
+          </Button>
+          <Button onClick={() => navigate(ROUTES.home)}>대시보드로</Button>
+        </div>
+      </AppShell>
+    )
+  }
+
+  if (!isCurrent) {
+    return (
+      <AppShell chrome="focus">
+        <PageHeader
+          back={() => navigate(ROUTES.home)}
+          title="결과를 찾을 수 없어요"
+          description="주소가 잘못됐거나 이미 정리된 세션이에요. 기록 화면에서 지난 세션을 볼 수 있어요."
+        />
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => navigate(ROUTES.history)}>
+            기록 보기
+          </Button>
+          <Button onClick={() => navigate(ROUTES.home)}>대시보드로</Button>
+        </div>
+      </AppShell>
+    )
+  }
 
   const completed = session.status === 'completed'
 

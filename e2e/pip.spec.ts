@@ -16,6 +16,8 @@ async function forceUnsupported(page: import('@playwright/test').Page) {
 test('토글 OFF(기본값) → 세션 시작 시 자동 PiP·폴백 위젯이 없다', async ({ page }) => {
   await forceUnsupported(page)
   await page.goto('/session/setup?demo=1')
+  // 데모 모드에서는 3분 데모 세션만 시작할 수 있습니다.
+  await page.getByText('3분 데모').click()
   await page.getByRole('button', { name: /집중 시작|데모 시작/ }).click()
 
   await expect(page.getByText('남은 시간')).toBeVisible()
@@ -38,6 +40,8 @@ test('토글 ON + 미지원 → 토스트 + 화면 안 미니 위젯, 세션은 
 
   // 세션 시작 (같은 click handler 에서 PiP 시도 → 미지원 → 폴백)
   await page.goto('/session/setup?demo=1')
+  // 데모 모드에서는 3분 데모 세션만 시작할 수 있습니다.
+  await page.getByText('3분 데모').click()
   await page.getByRole('button', { name: /집중 시작|데모 시작/ }).click()
 
   await expect(
@@ -95,6 +99,8 @@ test('지원 브라우저에서 세션 시작 → PiP 창 열림 (API 있으면 
   await toggleCard.getByRole('button', { name: '꺼짐' }).click()
 
   await page.goto('/session/setup?demo=1')
+  // 데모 모드에서는 3분 데모 세션만 시작할 수 있습니다.
+  await page.getByText('3분 데모').click()
   await page.getByRole('button', { name: /집중 시작|데모 시작/ }).click()
 
   // PiP 창이 실제로 열렸는지 (실패 시 폴백이 켜졌는지) 확인

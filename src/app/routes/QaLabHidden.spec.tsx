@@ -25,6 +25,9 @@ const { App } = await import('@/app/App')
 const { useGameStore } = await import('@/features/game/gameStore')
 const { usePostureStore } = await import('@/features/posture-engine/postureStore')
 const { useDemoStore } = await import('@/features/demo/demoMode')
+const { useProgressionStore } = await import(
+  '@/features/progression/progressionStore'
+)
 
 function renderAt(path: string) {
   return render(
@@ -39,6 +42,7 @@ describe('QA Lab 숨김', () => {
     useGameStore.getState().reset()
     usePostureStore.getState().reset()
     useDemoStore.getState().disableDemo()
+    useProgressionStore.getState().reset()
   })
 
   it('/lab 은 라우트가 없고 홈으로 되돌아간다', () => {

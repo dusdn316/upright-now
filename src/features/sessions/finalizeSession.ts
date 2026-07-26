@@ -37,12 +37,18 @@ export function finalizeSession(reason: 'timer' | 'manual'): {
   }
   finalizedSessionIds.add(sessionId)
 
-  const completed =
+  const timeOk =
     reason === 'timer' ||
     (session.plannedMs > 0 && session.elapsedMs >= COMPLETION_RATIO * session.plannedMs)
 
-  const status = completed ? ('completed' as const) : ('aborted' as const)
   const isDemo = useDemoStore.getState().isDemo
+
+  // 비데모 세션에서 자세 감지가 0초였다면(기준 미등록·카메라 미동작)
+  // 완주 보상·출석·상점 해제 대상이 아닙니다. 진행 시간은 중단 기록으로 남깁니다.
+  const detectionOk = isDemo || session.detectableMs > 0
+  const completed = timeOk && detectionOk
+
+  const status = completed ? ('completed' as const) : ('aborted' as const)
 
   if (completed) {
     // 기본 공격 (eventId 로 중복 차단)

@@ -32,6 +32,8 @@ export interface UprightDevApi {
   completeSession: () => void
   setStage: (stage: CharacterStage) => void
   enableDemo: () => void
+  /** e2e 용 — 세션·스트레칭 타이머 배속 */
+  setTimeScale: (scale: number) => void
   /** 캐릭터 이미지 로딩 실패 상황을 흉내 냅니다. (SVG 폴백 확인용) */
   setImagesBroken: (value: boolean) => void
   reset: () => void
@@ -86,6 +88,8 @@ export function createDevApi(): UprightDevApi {
       }),
 
     enableDemo: () => useDemoStore.getState().enableDemo(),
+
+    setTimeScale: (scale) => useSessionStore.getState().setTimeScale(scale),
 
     setImagesBroken: (value) =>
       useQaFlagsStore.getState().setCharacterImagesBroken(value),

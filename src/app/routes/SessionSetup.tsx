@@ -15,6 +15,7 @@ import { useUserStore } from '@/features/onboarding/userStore'
 import { useCharacterStage } from '@/features/progression/progressionStore'
 import { useGameStore } from '@/features/game/gameStore'
 import { useModeStore, useActiveModeConfig } from '@/features/modes/modeStore'
+import { useDemoStore } from '@/features/demo/demoMode'
 import { useCalibrationStore } from '@/features/calibration/calibrationStore'
 import { useState } from 'react'
 
@@ -33,9 +34,23 @@ export function SessionSetup() {
   const [customRest, setCustomRest] = useState(5)
   const { subject, goal, lengthId, mode, configure, start } = useSessionStore()
   const resetGame = useGameStore((s) => s.reset)
+  const isDemo = useDemoStore((s) => s.isDemo)
   const { push } = useToast()
 
+  // 비데모 일반 세션은 자세 기준이 있어야 시작할 수 있습니다. (3분 데모 예외)
+  const calibrationRequired =
+    featureFlags.camera && !isDemo && lengthId !== 'demo' && calProfiles.length === 0
+
   const startSession = () => {
+    if (calibrationRequired) return
+    // 데모 모드 중에는 일반 세션을 시작하지 않습니다. (기록 오염 방지)
+    if (isDemo && lengthId !== 'demo') {
+      push({
+        title: '데모 중에는 3분 데모 세션만 시작할 수 있어요. 먼저 데모를 종료해 주세요.',
+        tone: 'info',
+      })
+      return
+    }
     resetGame()
     const id = `s-${Date.now()}`
     start(id)
@@ -211,10 +226,20 @@ export function SessionSetup() {
             </ul>
           </Card>
 
-          <Button size="lg" fullWidth onClick={startSession}>
-            <Icon name="play" size={18} />
-            {lengthId === 'custom' ? `${customFocus}분 집중 시작` : `${SESSION_LENGTHS.find((o) => o.id === lengthId)?.label ?? '25분 집중'} 시작`}
-          </Button>
+          {calibrationRequired ? (
+            <Button
+              size="lg"
+              fullWidth
+              onClick={() => navigate(`${ROUTES.calibration}?return=${ROUTES.sessionSetup}`)}
+            >
+              자세 기준 등록
+            </Button>
+          ) : (
+            <Button size="lg" fullWidth onClick={startSession}>
+              <Icon name="play" size={18} />
+              {lengthId === 'custom' ? `${customFocus}분 집중 시작` : `${SESSION_LENGTHS.find((o) => o.id === lengthId)?.label ?? '25분 집중'} 시작`}
+            </Button>
+          )}
         </div>
       </div>
     </AppShell>

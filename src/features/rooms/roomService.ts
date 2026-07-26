@@ -363,19 +363,40 @@ export async function joinRoom(
 
 export async function setMyState(state: MemberState): Promise<void> {
   await channel?.track(myPresence(state))
+  // 서버 검증(start_room_session)이 준비 상태를 읽을 수 있도록
+  // 내 room_members.state 도 함께 기록합니다. (RLS: 내 행만 수정 가능)
+  const s = store()
+  const supabase = await getSupabase()
+  if (!supabase || !s.roomId || !s.myId) return
+  await supabase
+    .from('room_members')
+    .update({ state })
+    .eq('room_id', s.roomId)
+    .eq('user_id', s.myId)
 }
 
-/** 방장만 시작 — 두 명 모두 ready 인지 확인은 UI 가 담당합니다. */
+/**
+ * 방장만 시작 — 서버(start_room_session RPC)가 방장·waiting·2명·
+ * 두 명 모두 ready 를 검증합니다. UI disabled 는 보조 수단일 뿐입니다.
+ * 라이브 DB 에 마이그레이션이 아직 없으면(RPC 미존재) 기존 경로로 폴백합니다.
+ */
 export async function startRoomSession(): Promise<boolean> {
   const s = store()
   const supabase = await getSupabase()
   if (!supabase || !s.roomId || !s.isHost) return false
 
-  const { error } = await supabase
-    .from('rooms')
-    .update({ status: 'running', started_at: new Date().toISOString() })
-    .eq('id', s.roomId)
-  if (error) return false
+  const { error } = await supabase.rpc('start_room_session', {
+    p_room_id: s.roomId,
+  })
+  if (error) {
+    // PGRST202 = 함수 없음 (마이그레이션 전) → 레거시 직접 UPDATE 폴백
+    if (error.code !== 'PGRST202') return false
+    const { error: legacyError } = await supabase
+      .from('rooms')
+      .update({ status: 'running', started_at: new Date().toISOString() })
+      .eq('id', s.roomId)
+    if (legacyError) return false
+  }
   await setMyState('focusing')
   return true
 }
@@ -456,6 +477,23 @@ export async function leaveRoom(): Promise<void> {
   if (reconnectTimer) window.clearTimeout(reconnectTimer)
   if (pollTimer) window.clearInterval(pollTimer)
   pollTimer = null
+  // 서버 쪽 멤버 행 정리 — 마지막 참가자면 방을 closed 처리하고,
+  // 방장이 나가면 남은 참가자에게 방장을 넘깁니다. (leave_room RPC)
+  // 마이그레이션 전(함수 없음)이나 오프라인이면 조용히 건너뜁니다.
+  try {
+    const s = store()
+    const supabase = await getSupabase()
+    if (supabase && s.roomId) {
+      await supabase.rpc('leave_room', { p_room_id: s.roomId })
+    }
+  } catch {
+    /* 정리는 최선 노력 — 실패해도 로컬 종료는 계속 */
+  }
+  try {
+    sessionStorage.removeItem(REJOIN_KEY)
+  } catch {
+    /* 무시 */
+  }
   await channel?.unsubscribe()
   channel = null
   giraffe = createGiraffeSync()
