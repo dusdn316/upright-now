@@ -120,3 +120,18 @@ Production 환경변수는 변경하지 않았고, campus SQL 은 어떤 DB 에�
 - e2e: 기본(5283, 캠퍼스 OFF) + 캠퍼스(5284, ON) 이중 서버 — 최종 수치는
   아래 완료 보고 참조 (room-live 라이브 포함)
 - build 통과
+
+## 2026-07-27 후속 — 수동 검수 16개 항목 수정 (RC2)
+
+- 방 상태 누수 4중 게이트(isRoomSessionActive)·세션 후 방 정리·heartbeat
+  마이그레이션(20260727_room_presence_cleanup.sql, 라이브 미실행)
+- 친구 라우팅(친구 방 만들기·입장하기)·감지 프리플라이트 준비 게이트
+- 1분 빠른 점검(보상·출석·캠퍼스·괴물 0)·완료 인정 사유·상점 자동 복구
+- 단일 집계 selector(홈·기록 동일)·최근 세션 3개
+- 경제 v2(길이별 완주·회복 25/5·유효 집중 5분 공격·상점 신가격+특별 2종)
+- 모드별 괴물 4phase 장기 진행도(세션 간 유지, 방 꼬몽이 분리)
+- KST 출석 streak+마일스톤·커스텀 응원 문구(문구만, 채팅 없음)·사운드 확장
+- 동적 캘리브레이션 가이드(고정선 제거)·커스텀 학교 이름(stable key)
+- 36 territory 불규칙 섬 지도(기존 tileId 승계 = 데이터 무손실 migration)
+- campus realtime v2 SQL(20260727_campus_realtime_v2.sql, 라이브 미실행)
+- 테스트: unit 352/352 · e2e 94/94(마지막 room-live 재검증 통과) · lint 0 · build OK
