@@ -163,3 +163,40 @@ export function useCampusTheme(): CampusThemeTokens | null {
   const customColor = useCampusThemeStore((s) => s.customColor)
   return resolveCampusTheme(schoolId, customColor)
 }
+
+/** 학교 이름 정리 — HTML 태그·제어문자 제거 */
+export function sanitizeSchoolName(raw: string, max: number): string {
+  return raw
+    .replace(/<[^>]*>/g, '')
+    .replace(/[<>]/g, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max)
+}
+
+/**
+ * 커스텀 학교의 안정 내부 key — 표시 이름과 분리됩니다.
+ * 같은 이름(정규화 기준)은 항상 같은 key 가 됩니다. (djb2 해시)
+ */
+export function customSchoolStableKey(name: string): string {
+  const normalized = sanitizeSchoolName(name, 30)
+    .toLowerCase()
+    .replace(/\s+/g, '')
+  let hash = 5381
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = ((hash << 5) + hash + normalized.charCodeAt(i)) | 0
+  }
+  return `custom-${(hash >>> 0).toString(16)}`
+}
+
+/** 화면 표시용 학교 이름 — 커스텀이면 사용자가 입력한 이름 */
+export function displaySchoolName(
+  schoolId: string | null,
+  presetName: string | undefined,
+  customName: string,
+): string {
+  if (schoolId === 'custom') return customName || '직접 설정 학교'
+  return presetName ?? '미선택'
+}
