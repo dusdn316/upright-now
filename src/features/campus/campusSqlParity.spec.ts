@@ -47,6 +47,8 @@ describe('campus v2 — 스키마/저장소 명칭 일치', () => {
     'select_campus_school',
     'apply_campus_contribution',
     'campus_season_standings',
+    'campus_school_directory',
+    'ensure_active_campus_season',
   ]
 
   it('SQL 에 최종 기준 명칭이 모두 있다', () => {
@@ -94,6 +96,8 @@ describe('campus v2 — 소속 위조 차단 (서버 결정)', () => {
     )
     expect(signature).not.toContain('p_school_id')
     expect(signature).not.toContain('p_member_hash')
+    // 점수도 서버 CASE 로만 — 클라이언트 인자 없음
+    expect(signature).not.toContain('p_points')
     expect(campusSql).toContain(
       'select school_id into v_school',
     )
@@ -107,11 +111,12 @@ describe('campus v2 — 소속 위조 차단 (서버 결정)', () => {
     )
     expect(call).not.toContain('p_school_id')
     expect(call).not.toContain('p_member_hash')
+    expect(call).not.toContain('p_points')
   })
 
   it('membership 변경 제한과 커스텀 학교 소유권이 서버에 있다', () => {
     expect(campusSql).toContain('changes_in_season >= 1')
-    expect(campusSql).toContain('created_by = auth.uid()')
+    expect(campusSql).toContain('created_by is distinct from auth.uid()')
     expect(campusSql).toContain("p_id !~ '^custom-[0-9a-f]{1,8}$'")
   })
 })
@@ -138,5 +143,54 @@ describe('room presence v2 — 멤버십 가드', () => {
   it('완료 처리는 running + 정확히 2명 완주일 때만', () => {
     expect(roomSql).toContain("where id = p_room_id and status = 'running'")
     expect(roomSql).toContain('v_total = 2 and v_done = 2')
+  })
+})
+
+describe('campus v2.2 — 원장 보호·서버 점수·시즌 자동 전환', () => {
+  it('기여 원장은 직접 SELECT 불가 (정책 제거 + 권한 회수)', () => {
+    expect(campusSql).toContain(
+      'revoke select on public.campus_contributions from authenticated',
+    )
+    expect(campusSql).not.toContain(
+      'create policy campus_contributions_select',
+    )
+  })
+
+  it('학교 디렉터리 뷰는 created_by 를 노출하지 않는다', () => {
+    const view = campusSql.slice(
+      campusSql.indexOf('create or replace view public.campus_school_directory'),
+      campusSql.indexOf('grant select on public.campus_school_directory'),
+    )
+    expect(view).toContain('display_name')
+    expect(view).not.toContain('created_by')
+    expect(campusSql).toContain(
+      'revoke select on public.campus_schools from authenticated',
+    )
+  })
+
+  it('점수는 서버 CASE 로만 결정된다 (100/50/20/20)', () => {
+    expect(campusSql).toContain("when 'session_completed' then 100")
+    expect(campusSql).toContain("when 'friend_session_completed' then 50")
+    expect(campusSql).toContain("when 'posture_recovered' then 20")
+    expect(campusSql).toContain("when 'stretch_completed' then 20")
+  })
+
+  it('악용 제한 — 일일 600·회복 5회·20초·sessionId 필수', () => {
+    expect(campusSql).toContain('> 600')
+    expect(campusSql).toContain('daily_cap')
+    expect(campusSql).toContain('recovery_cap')
+    expect(campusSql).toContain("interval '20 seconds'")
+    expect(campusSql).toContain('session_required')
+  })
+
+  it('시즌 자동 전환은 advisory lock 으로 직렬화된다', () => {
+    expect(campusSql).toContain('pg_advisory_xact_lock')
+    expect(campusSql).toContain('ensure_active_campus_season')
+  })
+
+  it('커스텀 학교는 명시적 결과를 돌려준다', () => {
+    for (const r of ['created', 'updated', 'name_conflict', 'ownership_conflict', 'invalid']) {
+      expect(campusSql).toContain("'" + r + "'")
+    }
   })
 })

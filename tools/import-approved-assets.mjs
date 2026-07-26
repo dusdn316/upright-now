@@ -15,7 +15,7 @@
 import AdmZip from 'adm-zip'
 import sharp from 'sharp'
 import { createHash } from 'node:crypto'
-import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 

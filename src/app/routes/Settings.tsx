@@ -29,15 +29,14 @@ function CampusSyncNotice() {
   const clear = useCampusThemeStore((s) => s.clearSyncNotice)
   if (!notice) return null
   return (
-    <p
-      role="status"
+    <output
       className="mt-2 rounded-xl bg-canvas px-3 py-2 text-xs font-semibold text-ink"
     >
       {notice}
       <button type="button" className="ml-2 underline" onClick={clear}>
         닫기
       </button>
-    </p>
+    </output>
   )
 }
 

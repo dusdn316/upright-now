@@ -152,3 +152,21 @@ Production 환경변수는 변경하지 않았고, campus SQL 은 어떤 DB 에�
 - **blocking**: 라이브 Supabase 통합 테스트는 "SQL 직접 실행 금지" 제약으로
   미수행 — 사용자가 두 SQL 실행 후 CAMPUS_SUPABASE=true Preview 에서
   §5 시나리오를 확인해야 함. Preview 는 mock(false) 유지 중.
+
+## 2026-07-27 PHASE A — 승인 에셋 연결 + SQL 최종 보안 (RC3)
+
+- 승인 에셋 124개 import(assets:import/verify 재현 가능, WebP 88, 256/512/1024):
+  캐릭터 6단계·북몽이/늘몽이/꼬몽이 4phase·상점 레이어 66장·스트레칭 6장·
+  캠퍼스 지도 768/1024/1536. 금지 팩(full_asset_pack)은 미사용.
+- 캐릭터: idle 단일 이미지 + CSS 상태 연출(char-state-*, stage 체형별
+  기준점), 공격 포즈 2.2s. 상점: back→base→jacket→front 레이어,
+  특별 아이템은 mask+gradient. 괴물: MonsterViewport(피격/진화/주저앉기,
+  테마 파티클). 스트레칭: 승인 카드+확대. 지도: 승인 배경 1536×1024 위
+  36 폴리곤 오버레이(stable id 불변, fill 0.28~0.52).
+- SQL v2.2: 기여 원장 직접 SELECT 차단, campus_school_directory 뷰
+  (created_by 비노출), 점수 서버 CASE(100/50/20/20, p_points 제거),
+  일일 600·회복 5회/20초·sessionId 필수, ensure_active_campus_season
+  (advisory lock 시즌 자동 전환), 학교 선택 서버 확정/롤백(syncNotice),
+  커스텀 학교 명시 결과(created/updated/name_conflict/ownership_conflict/
+  invalid). room presence SQL 은 멤버십 가드 구조 유지 확인.
+- 라이브 검증은 PHASE B — 사용자가 SQL 2건 실행 후 "SQL 2개 실행 완료. 계속."

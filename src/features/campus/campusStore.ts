@@ -5,6 +5,7 @@ import { MockCampusRepository, type CampusIdentity } from './mockRepository'
 import { SupabaseCampusRepository } from './supabaseRepository'
 import { getCampusMemberId } from './identity'
 import { customSchoolStableKey, useCampusThemeStore } from './campusThemeStore'
+import { useDemoStore } from '@/features/demo/demoMode'
 import { rankStandings } from './contribution'
 import { seasonAt } from './season'
 import { createSeasonMap } from './campusMap'
@@ -185,6 +186,8 @@ export async function syncSchoolSelection(
   schoolId: string,
 ): Promise<'selected' | 'changed' | 'unchanged' | 'change_limit' | 'not_ready'> {
   if (!repository || repository.kind !== 'supabase') return 'unchanged'
+  // 데모 모드의 임시 선택은 서버 membership 에 기록하지 않습니다.
+  if (useDemoStore.getState().isDemo) return 'unchanged'
   const repo = repository as import('./supabaseRepository').SupabaseCampusRepository
 
   let serverSchoolId = schoolId

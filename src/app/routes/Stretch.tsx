@@ -130,7 +130,8 @@ export function Stretch() {
       void recordCampusContribution({
         kind: 'stretch_completed',
         eventId: `campus-stretch-${stretchSessionIdRef.current}`,
-        sessionId: useSessionStore.getState().sessionId,
+        // 서버는 sessionId 필수 — 스트레칭은 방문 단위 id 를 사용합니다.
+        sessionId: stretchSessionIdRef.current,
       })
     }
     exitToOrigin()
@@ -192,13 +193,18 @@ export function Stretch() {
               <StretchFigure routineId={routine.id} />
             )}
             {zoomed && cardSrc && (
-              <div
-                role="dialog"
+              <dialog
+                open
                 aria-label={`${routine.name} 카드 확대`}
-                className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-6"
-                onClick={() => setZoomed(false)}
+                className="fixed inset-0 z-50 flex h-full w-full items-center justify-center bg-transparent p-6"
               >
-                <img src={cardSrc} alt={`${routine.name} 동작 카드 확대`} className="max-h-full max-w-full rounded-2xl" />
+                <button
+                  type="button"
+                  aria-label="확대 닫기"
+                  className="absolute inset-0 h-full w-full bg-ink/70"
+                  onClick={() => setZoomed(false)}
+                />
+                <img src={cardSrc} alt={`${routine.name} 동작 카드 확대`} className="relative max-h-full max-w-full rounded-2xl" />
                 <button
                   type="button"
                   className="absolute top-4 right-4 rounded-xl bg-surface px-3 py-1.5 text-sm font-bold text-ink"
@@ -206,7 +212,7 @@ export function Stretch() {
                 >
                   닫기
                 </button>
-              </div>
+              </dialog>
             )}
             <h2 className="text-xl font-bold text-ink">{routine.name}</h2>
             <p className="text-sm text-ink-soft">{routine.note}</p>

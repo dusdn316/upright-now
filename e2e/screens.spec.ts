@@ -87,7 +87,7 @@ test.describe('1440x1000', () => {
       page.getByText('처음 등록한 기준으로 가볍게 돌아와 볼까요?'),
     ).toBeVisible()
     await expect(
-      page.locator('main figure[data-asset-state="slouch"]'),
+      page.locator('main figure[data-visual-state="slouch"]'),
     ).toBeVisible()
     await settle(page)
     await page.screenshot({ path: `${DIR}/04-session-bad-1440.png`, fullPage: true })
