@@ -28,6 +28,7 @@ export function buildSessionSummary(
   session: SessionShape,
   game: GameShape,
   status: 'completed' | 'aborted',
+  extra: Pick<SessionSummary, 'isTest' | 'completionReason'> = {},
 ): SessionSummary {
   const now = Date.now()
   return {
@@ -52,5 +53,6 @@ export function buildSessionSummary(
     damageDealt: game.boss.maxHp - game.boss.hp,
     xpEarned: game.sessionXp,
     pointsEarned: game.sessionPoints,
+    ...extra,
   }
 }

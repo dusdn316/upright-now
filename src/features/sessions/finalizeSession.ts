@@ -6,8 +6,9 @@ import { applyReward } from '@/features/game/rewards'
 import { useProgressionStore } from '@/features/progression/progressionStore'
 import { useDemoStore } from '@/features/demo/demoMode'
 import { registerSessionLockRelease } from './sessionLocks'
-import { useRoomStore } from '@/features/rooms/roomStore'
+import { isRoomSessionActive } from '@/features/rooms/roomStore'
 import { reportSessionComplete } from '@/features/rooms/roomService'
+import { kstDateKey } from '@/lib/time/kst'
 
 /**
  * 세션 종료의 단일 진입점 — atomic 하게 한 번만 실행됩니다.
@@ -47,14 +48,19 @@ export function finalizeSession(reason: 'timer' | 'manual'): {
   // 완주 보상·출석·상점 해제 대상이 아닙니다. 진행 시간은 중단 기록으로 남깁니다.
   const detectionOk = isDemo || session.detectableMs > 0
   const completed = timeOk && detectionOk
+  // 1분 빠른 점검 — 완료해도 보상·출석·상점·괴물 진행에 반영하지 않습니다.
+  const isTest = session.lengthId === 'test'
+  const completionReason: NonNullable<
+    import('@/types').SessionSummary['completionReason']
+  > = isTest ? 'test' : completed ? 'normal' : !detectionOk ? 'no-detection' : 'under-80'
 
   const status = completed ? ('completed' as const) : ('aborted' as const)
 
-  if (completed) {
+  if (completed && !isTest) {
     // 기본 공격 (eventId 로 중복 차단)
     useGameStore.getState().sessionCompleted(`session-complete-${sessionId}`)
     // 친구 방 세션이면 공동 보스에도 완주 공격을 보냅니다.
-    if (useRoomStore.getState().phase === 'running') {
+    if (isRoomSessionActive()) {
       void reportSessionComplete()
     }
     // 완주 보상 — 반드시 applyReward 를 통해서만
@@ -64,8 +70,8 @@ export function finalizeSession(reason: 'timer' | 'manual'): {
       type: 'session_completed',
     })
     if (!isDemo) {
-      const dateKey = new Date().toISOString().slice(0, 10)
-      useProgressionStore.getState().completeSessionMark(dateKey)
+      // 출석 날짜는 KST 기준으로 통일합니다.
+      useProgressionStore.getState().completeSessionMark(kstDateKey())
     }
   }
 
@@ -78,6 +84,7 @@ export function finalizeSession(reason: 'timer' | 'manual'): {
           useSessionStore.getState(),
           useGameStore.getState(),
           status,
+          { isTest: isTest || undefined, completionReason },
         ),
       )
   }

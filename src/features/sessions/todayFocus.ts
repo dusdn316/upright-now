@@ -71,3 +71,44 @@ export function formatFocusClock(ms: number): string {
   const ss = String(s).padStart(2, '0')
   return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`
 }
+
+export interface SessionStats {
+  /** sessionId 중복 제거 + 1분 점검 제외 목록 (최신순) */
+  deduped: SessionSummary[]
+  totalFocusedMs: number
+  completedCount: number
+  abortedCount: number
+  detectableMs: number
+  recoveries: number
+  /** 실제 최근 세션 3개 */
+  recentSessions: SessionSummary[]
+}
+
+/**
+ * 홈·기록·성장 화면이 공유하는 단일 집계 — 이 함수 밖에서
+ * summaries.reduce 나 progression.completedSessions 를 직접 쓰지 않습니다.
+ */
+export function selectSessionStats(summaries: SessionSummary[]): SessionStats {
+  const deduped = dedupeBySessionId(summaries).filter((s) => !s.isTest)
+  let totalFocusedMs = 0
+  let completedCount = 0
+  let abortedCount = 0
+  let detectableMs = 0
+  let recoveries = 0
+  for (const s of deduped) {
+    totalFocusedMs += s.elapsedMs
+    detectableMs += s.detectableMs
+    recoveries += s.recoveries
+    if (s.status === 'completed') completedCount += 1
+    else abortedCount += 1
+  }
+  return {
+    deduped,
+    totalFocusedMs,
+    completedCount,
+    abortedCount,
+    detectableMs,
+    recoveries,
+    recentSessions: deduped.slice(0, 3),
+  }
+}

@@ -66,6 +66,17 @@ export function SessionSetup() {
   const needSelect = !calibrationExempt && calProfiles.length > 0 && !validActive
   const calibrationRequired = needRegister || needSelect
 
+  /** 1분 빠른 점검 — 카메라·자세 변화·사운드·PIP·공격 연출만 확인. 보상 0 */
+  const startQuickCheck = () => {
+    if (calibrationRequired) return
+    if (useRoomStore.getState().phase !== 'idle') void leaveRoom()
+    configure({ mode: 'solo', lengthId: 'test' })
+    resetGame()
+    const id = `t-${Date.now()}`
+    start(id)
+    navigate(ROUTES.session(id))
+  }
+
   const startSession = () => {
     if (calibrationRequired) return
     // 개인 세션은 항상 solo — 이전 친구 방 상태가 남아 있으면 정리합니다.
@@ -144,7 +155,17 @@ export function SessionSetup() {
                   <label className="flex flex-col gap-1">
                     <span className="text-xs font-semibold text-ink-soft">집중 (5~120분, 5분 단위)</span>
                     <input type="number" min={5} max={120} step={5} value={customFocus}
-                      onChange={(e) => { const v = Number(e.target.value); setCustomFocus(v); configure({ lengthId: 'custom', customFocusMin: v, customRestMin: customRest }) }}
+                      onChange={(e) => {
+                        const v = Number(e.target.value)
+                        setCustomFocus(v)
+                        if (v > 0 && v < 5) {
+                          push({
+                            title: '보상 세션은 최소 5분이에요. 1분만 확인하려면 빠른 점검을 이용해 주세요.',
+                            tone: 'info',
+                          })
+                        }
+                        configure({ lengthId: 'custom', customFocusMin: v, customRestMin: customRest })
+                      }}
                       className="h-10 w-28 rounded-xl border border-line bg-surface px-3" />
                   </label>
                   <label className="flex flex-col gap-1">
@@ -302,10 +323,15 @@ export function SessionSetup() {
               친구 방 만들기·입장하기
             </Button>
           ) : (
-            <Button size="lg" fullWidth onClick={startSession}>
-              <Icon name="play" size={18} />
-              {lengthId === 'custom' ? `${customFocus}분 집중 시작` : `${SESSION_LENGTHS.find((o) => o.id === lengthId)?.label ?? '25분 집중'} 시작`}
-            </Button>
+            <>
+              <Button size="lg" fullWidth onClick={startSession}>
+                <Icon name="play" size={18} />
+                {lengthId === 'custom' ? `${customFocus}분 집중 시작` : `${SESSION_LENGTHS.find((o) => o.id === lengthId)?.label ?? '25분 집중'} 시작`}
+              </Button>
+              <Button size="sm" variant="ghost" fullWidth onClick={startQuickCheck}>
+                1분 빠른 점검 (보상 없음)
+              </Button>
+            </>
           )}
         </div>
       </div>

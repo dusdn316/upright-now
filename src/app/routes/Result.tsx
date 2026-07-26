@@ -51,6 +51,15 @@ export function Result() {
   const [nextAction, setNextAction] = useState(
     () => storedSummary?.nextAction ?? '',
   )
+  const REASON_LABEL: Record<string, string> = {
+    normal: '정상 완료',
+    'under-80': '계획 시간 80% 미만',
+    'no-detection': '감지 가능 시간 없음',
+    test: '1분 테스트',
+  }
+  const reasonLabel = storedSummary?.completionReason
+    ? REASON_LABEL[storedSummary.completionReason]
+    : null
   const monsterName =
     session.mode === 'room'
       ? MONSTER_THEMES.komong.name
@@ -186,9 +195,10 @@ export function Result() {
             : '여기까지의 기록을 정리했어요.'
         }
         description={
-          completed
+          (completed
             ? `회복 행동이 ${monsterName}에게 그대로 전달됐어요.`
-            : '다음에 이어서 시작해도 괜찮아요.'
+            : '다음에 이어서 시작해도 괜찮아요.') +
+          (reasonLabel ? ` (인정 사유: ${reasonLabel})` : '')
         }
         action={<Badge tone={completed ? 'green' : 'muted'}>{completed ? '완료' : '중도 종료'}</Badge>}
       />

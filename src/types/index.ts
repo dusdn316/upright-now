@@ -80,6 +80,10 @@ export interface SessionSummary {
   targetProgressLabel?: string
   /** 다음 할 일 한 줄 (최대 80자, HTML·제어문자 제거) */
   nextAction?: string
+  /** 1분 빠른 점검 — 보상·출석·캠퍼스·집계 대상 아님 */
+  isTest?: boolean
+  /** 완료/중단 인정 사유 */
+  completionReason?: 'normal' | 'under-80' | 'no-detection' | 'test'
 }
 
 /* ------------------------------- 학습 프로필 ------------------------------ */

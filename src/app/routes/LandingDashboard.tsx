@@ -36,8 +36,8 @@ import { formatDuration } from '@/features/sessions/sessionMachine'
 import { useSessionHistoryStore } from '@/features/sessions/sessionHistoryStore'
 import {
   formatFocusClock,
+  selectSessionStats,
   selectTodayFocus,
-  selectTotalFocusMs,
 } from '@/features/sessions/todayFocus'
 import { CampusDashboardCard } from '@/components/campus/CampusDashboardCard'
 
@@ -47,7 +47,7 @@ export function LandingDashboard() {
   const { nickname, hasOnboarded, hasCalibration } = useUserStore()
   const modeConfig = useActiveModeConfig()
   const stage = useCharacterStage()
-  const { xp, points, attendance, completedSessions } = useProgressionStore()
+  const { xp, points, attendance } = useProgressionStore()
   const { combo, bestCombo } = useGameStore()
   const snapshot = usePostureStore((s) => s.snapshot)
   const { lengthId, configure, status } = useSessionStore()
@@ -57,7 +57,9 @@ export function LandingDashboard() {
   // 세션 요약 저장(finalizeSession) 직후 zustand 구독으로 즉시 갱신됩니다.
   const summaries = useSessionHistoryStore((s) => s.summaries)
   const todayFocus = useMemo(() => selectTodayFocus(summaries), [summaries])
-  const totalFocusMs = useMemo(() => selectTotalFocusMs(summaries), [summaries])
+  // 홈·기록·성장이 공유하는 단일 집계 — 값 불일치를 원천 차단합니다.
+  const stats = useMemo(() => selectSessionStats(summaries), [summaries])
+  const totalFocusMs = stats.totalFocusedMs
 
   const isFirstVisit = !hasOnboarded
 
@@ -120,6 +122,33 @@ export function LandingDashboard() {
             <p className="mt-0.5 text-xs text-ink-soft">
               {`괴물 · ${MONSTER_THEMES[modeConfig.monsterTheme].name}`}
             </p>
+          </Card>
+
+          <Card className="p-4">
+            <CardTitle>최근 세션</CardTitle>
+            {stats.recentSessions.length === 0 ? (
+              <p className="mt-2 text-xs text-ink-soft">아직 세션 기록이 없어요.</p>
+            ) : (
+              <ul className="mt-2 flex flex-col gap-1.5">
+                {stats.recentSessions.map((s) => (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(ROUTES.result(s.sessionId ?? s.id))}
+                      className="w-full rounded-xl bg-canvas px-3 py-2 text-left text-xs hover:bg-line/40"
+                    >
+                      <span className="font-bold text-ink">{s.subject || '집중 세션'}</span>
+                      <span className="ml-1.5 text-ink-soft">
+                        {s.status === 'completed' ? '완료' : '중도 종료'}
+                        {' · '}
+                        {formatDuration(s.elapsedMs)}
+                        {` · 회복 ${s.recoveries}회`}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
 
           <Card className="p-4">
@@ -280,7 +309,7 @@ export function LandingDashboard() {
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-ink">최근 세션</h2>
         </div>
-        {completedSessions === 0 && summaries.length === 0 ? (
+        {stats.completedCount === 0 && summaries.length === 0 ? (
           <EmptyState
             title="아직 기록이 없어요"
             description="첫 세션을 마치면 여기에 회복 콤보와 감지 가능 시간이 쌓여요."
@@ -293,7 +322,7 @@ export function LandingDashboard() {
         ) : (
           <Card className="p-4">
             <p className="text-sm text-ink-soft">
-              {`완료한 세션 ${completedSessions}회 · 누적 집중 ${formatDuration(totalFocusMs)}`}
+              {`완료한 세션 ${stats.completedCount}회 · 누적 집중 ${formatDuration(totalFocusMs)}`}
             </p>
           </Card>
         )}

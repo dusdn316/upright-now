@@ -65,6 +65,19 @@ export const useSessionStore = create<SessionStoreState>((set) => ({
 
   configure: ({ subject, goal, lengthId, profileId, mode, customFocusMin, customRestMin }) =>
     set((s) => {
+      // 1분 빠른 점검 — 카메라·연출 확인 전용, 보상·출석·집계 없음
+      if (lengthId === 'test') {
+        return {
+          ...s,
+          lengthId: 'test',
+          plannedMs: 60_000,
+          restSec: 0,
+          mode: mode ?? s.mode,
+          subject: subject ?? s.subject,
+          goal: goal ?? s.goal,
+          profileId: profileId ?? s.profileId,
+        }
+      }
       const nextLengthId = lengthId ?? s.lengthId
       // 직접 설정: 집중 5~120분(5분 단위) · 회복 휴식 0~30분
       const custom = nextLengthId === 'custom'
