@@ -28,5 +28,12 @@ export interface CampusRepository {
   subscribe(listener: (snapshot: CampusSnapshot) => void): () => void
   /** 원자적 기여 반영 + 타일 점령 판정 */
   submitContribution(event: CampusContributionEvent): Promise<CampusSubmitResult>
+  /**
+   * 서버 소속(membership) 동기화 — supabase 저장소에서만 의미가 있습니다.
+   * mock 은 구현하지 않아도 됩니다(로컬 선택만 사용).
+   */
+  selectSchool?(
+    schoolId: string,
+  ): Promise<'selected' | 'changed' | 'unchanged' | 'change_limit' | 'not_ready'>
   dispose(): void
 }

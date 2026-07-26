@@ -174,3 +174,8 @@ export function selectMyTileCount(state: CampusStoreState, schoolId: string | nu
   if (!schoolId || !state.snapshot) return 0
   return state.snapshot.tiles.filter((t) => t.ownerSchoolId === schoolId).length
 }
+
+/** 학교 선택을 서버 membership 에 동기화 — supabase 저장소일 때만 동작 */
+export function syncSchoolSelection(schoolId: string): void {
+  void repository?.selectSchool?.(schoolId)
+}

@@ -119,6 +119,12 @@ export const useCampusThemeStore = create<CampusThemeState>((set, get) => ({
     }
     set(next)
     persist(next)
+    /*
+      Supabase 저장소가 켜져 있으면 서버 membership 도 동기화합니다.
+      기여 위조 방지의 최종 판정은 서버(select_campus_school + memberships)가
+      담당하고, 여기 로컬 제한은 UX 안내용입니다. (순환 import 방지: 동적 로드)
+    */
+    void import('./campusStore').then((m) => m.syncSchoolSelection(schoolId))
     return decision
   },
 

@@ -1,6 +1,6 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { ensureAnonymousUser, getSupabase } from '@/lib/supabase/client'
-import { withNormalizedScore } from './contribution'
+import { CONTRIBUTION_POINTS, withNormalizedScore } from './contribution'
 import { countTilesBySchool } from './territory'
 import type { CampusRepository, CampusSubmitResult } from './repository'
 import type {
@@ -42,7 +42,7 @@ interface TileRow {
 interface TileEventRow {
   id: string
   season_id: string
-  tile_id: string
+  territory_id: string
   kind: string
   from_school_id: string | null
   to_school_id: string | null
@@ -93,7 +93,7 @@ function toTileEvent(row: TileEventRow): CampusTileEvent {
   return {
     id: row.id,
     seasonId: row.season_id,
-    tileId: row.tile_id,
+    tileId: row.territory_id,
     kind: row.kind as CampusTileEvent['kind'],
     fromSchoolId: row.from_school_id,
     toSchoolId: row.to_school_id,
@@ -131,14 +131,14 @@ export class SupabaseCampusRepository implements CampusRepository {
 
     const [tiles, events, standings, mine, archived] = await Promise.all([
       supabase
-        .from('campus_tiles')
+        .from('campus_territories')
         .select(
           'id, season_id, x, y, zone, owner_school_id, challenger_school_id, defense_score, challenge_score, updated_at',
         )
         .eq('season_id', season.id),
       supabase
-        .from('campus_tile_events')
-        .select('id, season_id, tile_id, kind, from_school_id, to_school_id, created_at')
+        .from('campus_territory_events')
+        .select('id, season_id, territory_id, kind, from_school_id, to_school_id, created_at')
         .eq('season_id', season.id)
         .order('created_at', { ascending: false })
         .limit(60),
@@ -181,7 +181,7 @@ export class SupabaseCampusRepository implements CampusRepository {
           const archivedSeason = toSeason(row)
           const [archivedTiles, archivedStandings] = await Promise.all([
             supabase
-              .from('campus_tiles')
+              .from('campus_territories')
               .select(
                 'id, season_id, x, y, zone, owner_school_id, challenger_school_id, defense_score, challenge_score, updated_at',
               )
@@ -230,12 +230,12 @@ export class SupabaseCampusRepository implements CampusRepository {
           .channel('campus-territory')
           .on(
             'postgres_changes',
-            { event: '*', schema: 'public', table: 'campus_tiles' },
+            { event: '*', schema: 'public', table: 'campus_territories' },
             () => void this.refresh(),
           )
           .on(
             'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'campus_tile_events' },
+            { event: 'INSERT', schema: 'public', table: 'campus_territory_events' },
             () => void this.refresh(),
           )
           .subscribe()
@@ -262,32 +262,59 @@ export class SupabaseCampusRepository implements CampusRepository {
     if (!supabase) return { accepted: false, points: 0, reason: 'not_ready' }
     await ensureAnonymousUser()
 
-    // 원자적 RPC — eventId 멱등성과 타일 점령 판정을 서버가 처리합니다.
-    const { data, error } = await supabase.rpc('campus_record_contribution', {
+    /*
+      원자적 RPC (v2) — eventId 멱등성·영토 점령 판정을 서버가 처리합니다.
+      학교(school_id)와 멤버 해시는 클라이언트가 보내지 않습니다:
+      서버가 auth.uid() 의 campus_memberships 에서 조회해 위조를 차단합니다.
+    */
+    const { data, error } = await supabase.rpc('apply_campus_contribution', {
       p_event_id: event.eventId,
-      p_season_id: event.seasonId,
-      p_school_id: event.schoolId,
-      p_tile_id: event.tileId,
+      p_territory_id: event.tileId ?? null,
+      p_session_id: event.sessionId ?? null,
       p_kind: event.kind,
-      p_session_id: event.sessionId,
+      p_points: CONTRIBUTION_POINTS[event.kind],
     })
 
     if (error) return { accepted: false, points: 0, reason: 'not_ready' }
 
-    const row = (Array.isArray(data) ? data[0] : data) as
-      | { accepted: boolean; points: number; captured: boolean; contested: boolean }
-      | null
-      | undefined
-
-    if (!row) return { accepted: false, points: 0, reason: 'not_ready' }
+    const row = data as { result?: string; points?: number } | null
+    const result = row?.result ?? 'not_ready'
+    const accepted =
+      result === 'accepted' || result === 'captured' ||
+      result === 'contested' || result === 'defended'
     return {
-      accepted: row.accepted,
-      points: row.points ?? 0,
-      captured: row.captured,
-      contested: row.contested,
+      accepted,
+      points: accepted ? (row?.points ?? CONTRIBUTION_POINTS[event.kind]) : 0,
+      captured: result === 'captured',
+      contested: result === 'contested',
       tileId: event.tileId,
-      reason: row.accepted ? undefined : 'duplicate_event',
+      reason: accepted
+        ? undefined
+        : result === 'duplicate_event'
+          ? 'duplicate_event'
+          : 'not_ready',
     }
+  }
+
+  /** 서버 membership 갱신 — 다른 학교로의 기여 위조를 서버가 차단하는 기반 */
+  async selectSchool(
+    schoolId: string,
+  ): Promise<'selected' | 'changed' | 'unchanged' | 'change_limit' | 'not_ready'> {
+    const supabase = await getSupabase()
+    if (!supabase) return 'not_ready'
+    await ensureAnonymousUser()
+    const { data, error } = await supabase.rpc('select_campus_school', {
+      p_school_id: schoolId,
+    })
+    if (error) return 'not_ready'
+    const result = (data as { result?: string } | null)?.result
+    if (
+      result === 'selected' || result === 'changed' ||
+      result === 'unchanged' || result === 'change_limit'
+    ) {
+      return result
+    }
+    return 'not_ready'
   }
 
   dispose(): void {

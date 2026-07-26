@@ -135,3 +135,20 @@ Production 환경변수는 변경하지 않았고, campus SQL 은 어떤 DB 에�
 - 36 territory 불규칙 섬 지도(기존 tileId 승계 = 데이터 무손실 migration)
 - campus realtime v2 SQL(20260727_campus_realtime_v2.sql, 라이브 미실행)
 - 테스트: unit 352/352 · e2e 94/94(마지막 room-live 재검증 통과) · lint 0 · build OK
+
+## 2026-07-27 후속 2 — Supabase 보안·정합 수정 (RC2.1)
+
+- room presence RPC 전부 멤버십 가드(is_room_member)·자기 삭제 금지·
+  행 잠금 직렬화·"정확히 2명 완주"만 방 completed.
+- 캠퍼스 v2 단일 기준 확정: campus_territories/…_territory_events/
+  apply_campus_contribution + campus_memberships. school_id·member_hash 는
+  서버가 auth.uid() 로 결정(위조 불가), 학교 변경 시즌당 1회 서버 강제,
+  커스텀 학교는 created_by 소유권. SupabaseCampusRepository 전면 v2 정렬
+  (v1 tiles 경로 제거), Realtime 은 territories/territory_events 구독.
+- seed: 학교 프리셋 10 + 활성 시즌(클라이언트 season.ts 와 동일 규칙) +
+  islandMap 과 동일한 36 territory (territorySeedManifest.json + parity
+  스펙 13개로 고정).
+- 검증: unit 365/365 · e2e 94/94 · lint 0 · build OK.
+- **blocking**: 라이브 Supabase 통합 테스트는 "SQL 직접 실행 금지" 제약으로
+  미수행 — 사용자가 두 SQL 실행 후 CAMPUS_SUPABASE=true Preview 에서
+  §5 시나리오를 확인해야 함. Preview 는 mock(false) 유지 중.
