@@ -125,6 +125,11 @@ normalizedScore = totalContribution / sqrt(max(activeContributors, 1))
    - 경합 이벤트는 상태가 처음 바뀔 때만 로그에 남습니다
 6. 점령 순간 색상 변화 애니메이션 (`.anim-campus-capture`, 700ms, 1회)
 
+타일 이벤트 종류는 `captured` · `contested` · `reinforced` 입니다.
+`/campus` 의 **최근 점령 로그**는 `captured`·`contested` 만 보여 줍니다.
+방어 보강이 잦아 점령 기록을 밀어내 보이지 않게 되는 것을 막기 위한 필터이며,
+전체 기록은 `/campus/map` 과 `/campus/history` 의 **최근 영토 변화**에서 봅니다.
+
 기여를 넣을 타일은 ① 사용자가 지도에서 고른 타일 ② 내가 이미 공격 중인 타일 중
 진행도가 가장 높은 것 ③ 가장 약한 남/중립 타일 순으로 결정됩니다.
 
@@ -137,8 +142,12 @@ normalizedScore = totalContribution / sqrt(max(activeContributors, 1))
 - 같은 브라우저의 다른 탭 → `BroadcastChannel('upright-now:campus-mock')`
 - 같은 JS 컨텍스트의 다른 인스턴스 → 모듈 내 리스너
 - 스냅샷 전체를 전파하고, owner 가 바뀐 타일에 색상 변화 애니메이션을 트립니다.
-- 한계: 탭 간 동시 쓰기는 마지막 전파가 이깁니다 (프로토타입 수준).
-  단일 탭 안에서는 JS 가 순차 실행이라 유실이 없습니다.
+- **쓰기 직렬화**: 기여 반영은 `read-modify-write` 전체를
+  Web Locks(`navigator.locks.request`)로 감싸고, 상태를 **localStorage 에서 다시 읽어**
+  적용합니다. 메모리 캐시만 믿지 않으므로 다른 탭의 갱신을 덮어쓰지 않습니다.
+  (`mockRepository.spec.ts` 의 "다른 탭이 먼저 쓴 갱신을 덮어쓰지 않는다")
+- Web Locks 를 지원하지 않는 환경에서는 잠금 없이 진행합니다.
+  같은 탭 안에서는 JS 가 순차 실행이라 유실이 없고, 탭 간에는 아주 좁은 창이 남습니다.
 
 ### Supabase (선택)
 

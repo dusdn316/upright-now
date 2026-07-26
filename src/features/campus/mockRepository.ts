@@ -24,7 +24,11 @@ import type {
  *
  * 여기에는 카메라·랜드마크·자세 좌표·`bad` 상태가 저장되지 않습니다.
  */
-const MAX_TILE_EVENTS = 60
+/**
+ * 방어 보강(reinforced)이 점령·경합 로그를 빠르게 밀어내지 않도록 넉넉히 둡니다.
+ * "최근 점령 로그" 화면은 captured/contested 만 걸러서 보여 줍니다.
+ */
+const MAX_TILE_EVENTS = 120
 const MAX_PROCESSED_EVENTS = 500
 const CHANNEL_NAME = 'upright-now:campus-mock'
 
@@ -205,17 +209,49 @@ function rolloverIfNeeded(state: MockState, now: number): MockState {
   }
 }
 
-function loadShared(now: number): MockState {
-  if (!shared) {
-    const stored = loadLocal<MockState | null>(STORAGE_KEYS.campusMock, null)
-    shared =
-      stored && stored.season && Array.isArray(stored.tiles)
-        ? stored
-        : seedState(seasonAt(now), now)
+/**
+ * 저장소의 최신 상태를 읽습니다.
+ *
+ * localStorage 를 먼저 봅니다. 다른 탭이 방금 쓴 값이 여기에 있기 때문에,
+ * 메모리 캐시(`shared`)만 믿으면 탭 간 갱신 유실이 생깁니다.
+ * localStorage 를 쓸 수 없는 환경에서는 메모리 캐시로 되돌아갑니다.
+ */
+function readState(now: number): MockState {
+  const stored = loadLocal<MockState | null>(STORAGE_KEYS.campusMock, null)
+  const hasStored = Boolean(stored && stored.season && Array.isArray(stored.tiles))
+  const base = hasStored
+    ? (stored as MockState)
+    : (shared ?? seedState(seasonAt(now), now))
+
+  shared = base
+  const rolled = rolloverIfNeeded(base, now)
+  if (rolled !== base) {
+    publish(rolled)
+    return rolled
   }
-  const rolled = rolloverIfNeeded(shared, now)
-  if (rolled !== shared) publish(rolled)
-  return shared
+  // 처음 만든 지도는 바로 저장해 둡니다. 다른 탭이 같은 상태에서 시작합니다.
+  if (!hasStored) persist(base)
+  return base
+}
+
+/**
+ * 탭 간 쓰기 직렬화.
+ *
+ * Web Locks 를 지원하면 이름 있는 잠금으로 read-modify-write 구간을 감쌉니다.
+ * 지원하지 않으면 그대로 실행합니다. (같은 탭 안에서는 JS 가 순차 실행이라 안전)
+ */
+async function withWriteLock<T>(fn: () => T): Promise<T> {
+  const locks =
+    typeof navigator === 'undefined'
+      ? undefined
+      : (navigator as Navigator & { locks?: LockManager }).locks
+  if (!locks || typeof locks.request !== 'function') return fn()
+  try {
+    return await locks.request(CHANNEL_NAME, async () => fn())
+  } catch {
+    // 잠금을 얻지 못하면 잠금 없이 진행합니다. (프로토타입 저장소)
+    return fn()
+  }
 }
 
 function computeStandings(state: MockState): CampusSchoolStanding[] {
@@ -274,7 +310,7 @@ export class MockCampusRepository implements CampusRepository {
   }
 
   async load(): Promise<CampusSnapshot> {
-    return toSnapshot(loadShared(this.now()), this.identity())
+    return toSnapshot(readState(this.now()), this.identity())
   }
 
   subscribe(listener: (snapshot: CampusSnapshot) => void): () => void {
@@ -292,9 +328,17 @@ export class MockCampusRepository implements CampusRepository {
     }
   }
 
+  /**
+   * 기여 반영. read-modify-write 전체를 탭 간 잠금 안에서 실행하고,
+   * 상태를 localStorage 에서 다시 읽어 다른 탭의 갱신을 덮어쓰지 않습니다.
+   */
   async submitContribution(event: CampusContributionEvent): Promise<CampusSubmitResult> {
+    return withWriteLock(() => this.applyContribution(event))
+  }
+
+  private applyContribution(event: CampusContributionEvent): CampusSubmitResult {
     const at = event.occurredAt
-    const state = loadShared(at)
+    const state = readState(at)
 
     // eventId 멱등성 — 같은 이벤트는 두 번 반영되지 않습니다.
     if (state.processedEventIds.includes(event.eventId)) {

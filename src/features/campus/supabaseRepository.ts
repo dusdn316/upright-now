@@ -23,6 +23,9 @@ import type {
  * 전송하는 것: 학교 id · 시즌 id · 타일 id · 기여 종류 · 점수뿐입니다.
  * 카메라 영상·프레임·랜드마크·자세 좌표·`bad` 상태는 전송하지 않습니다.
  */
+/** 최종 지도까지 함께 불러올 보관 시즌 수 */
+const ARCHIVED_DETAIL_LIMIT = 3
+
 interface TileRow {
   id: string
   season_id: string
@@ -104,6 +107,11 @@ export class SupabaseCampusRepository implements CampusRepository {
   private channel: RealtimeChannel | null = null
   private listeners = new Set<(snapshot: CampusSnapshot) => void>()
   private last: CampusSnapshot | null = null
+  /**
+   * 보관 시즌은 더 이상 변하지 않으므로 한 번만 불러옵니다.
+   * Realtime 갱신마다 지난 시즌 타일을 다시 조회하지 않기 위한 캐시입니다.
+   */
+  private archivedCache: { key: string; value: CampusArchivedSeason[] } | null = null
 
   async load(): Promise<CampusSnapshot> {
     const supabase = await getSupabase()
@@ -157,9 +165,47 @@ export class SupabaseCampusRepository implements CampusRepository {
       }),
     )
 
-    const archivedList: CampusArchivedSeason[] = ((archived.data ?? []) as SeasonRow[]).map(
-      (row) => ({ season: toSeason(row), tiles: [], standings: [] }),
+    // 보관된 시즌은 최종 지도와 학교별 기여도까지 함께 불러옵니다.
+    // 개수를 제한하고 캐시해 Realtime 갱신마다 다시 조회하지 않습니다.
+    const archivedRows = ((archived.data ?? []) as SeasonRow[]).slice(
+      0,
+      ARCHIVED_DETAIL_LIMIT,
     )
+    const archivedKey = archivedRows.map((r) => r.id).join(',')
+    let archivedList: CampusArchivedSeason[]
+    if (this.archivedCache?.key === archivedKey) {
+      archivedList = this.archivedCache.value
+    } else {
+      archivedList = await Promise.all(
+        archivedRows.map(async (row) => {
+          const archivedSeason = toSeason(row)
+          const [archivedTiles, archivedStandings] = await Promise.all([
+            supabase
+              .from('campus_tiles')
+              .select(
+                'id, season_id, x, y, zone, owner_school_id, challenger_school_id, defense_score, challenge_score, updated_at',
+              )
+              .eq('season_id', archivedSeason.id),
+            supabase.rpc('campus_season_standings', { p_season_id: archivedSeason.id }),
+          ])
+          const tilesOfSeason = ((archivedTiles.data ?? []) as TileRow[]).map(toTile)
+          const counts = countTilesBySchool(tilesOfSeason)
+          return {
+            season: archivedSeason,
+            tiles: tilesOfSeason,
+            standings: ((archivedStandings.data ?? []) as StandingRow[]).map((s) =>
+              withNormalizedScore({
+                schoolId: s.school_id,
+                totalContribution: s.total_contribution,
+                activeContributors: s.active_contributors,
+                tiles: counts[s.school_id] ?? 0,
+              }),
+            ),
+          }
+        }),
+      )
+      this.archivedCache = { key: archivedKey, value: archivedList }
+    }
 
     const snapshot: CampusSnapshot = {
       season,
@@ -246,6 +292,7 @@ export class SupabaseCampusRepository implements CampusRepository {
 
   dispose(): void {
     this.listeners.clear()
+    this.archivedCache = null
     void this.channel?.unsubscribe()
     this.channel = null
   }

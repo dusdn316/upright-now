@@ -718,6 +718,33 @@ for select to authenticated using (user_id = auth.uid());
 -- 따라서 사용자는 타일·다른 학교의 기여·다른 사람의 소속을 직접 수정할 수 없습니다.
 
 -- ---------------------------------------------------------------------
+-- 13-1. 테이블 권한 (RLS 위의 두 번째 방어선)
+-- ---------------------------------------------------------------------
+-- Supabase 는 public 스키마의 새 테이블에 anon/authenticated 로 ALL 을 기본 grant 합니다.
+-- RLS 에 쓰기 정책이 없어 이미 막히지만, 나중에 실수로 허용 정책이 추가되어도
+-- 쓰기가 열리지 않도록 권한 자체를 회수합니다.
+revoke insert, update, delete, truncate on
+  public.campus_schools,
+  public.campus_seasons,
+  public.campus_memberships,
+  public.campus_tiles,
+  public.campus_contributions,
+  public.campus_tile_events
+from anon, authenticated;
+
+-- 공개 읽기 데이터
+grant select on
+  public.campus_schools,
+  public.campus_seasons,
+  public.campus_tiles,
+  public.campus_tile_events
+to anon, authenticated;
+
+-- 본인 데이터만 (anon 은 auth.uid() 가 없어 정책에서도 걸리지만 권한도 주지 않습니다)
+grant select on public.campus_memberships, public.campus_contributions to authenticated;
+revoke select on public.campus_memberships, public.campus_contributions from anon;
+
+-- ---------------------------------------------------------------------
 -- 14. 실행 권한
 -- ---------------------------------------------------------------------
 -- 관리 함수와 타일 점령 함수는 클라이언트가 직접 호출할 수 없어야 합니다.

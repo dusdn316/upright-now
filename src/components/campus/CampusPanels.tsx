@@ -85,15 +85,25 @@ const TILE_EVENT_LABEL: Record<CampusTileEvent['kind'], string> = {
   reinforced: '방어 보강',
 }
 
-/** 최근 점령 로그 / 최근 영토 변화 */
+/**
+ * 최근 점령 로그 / 최근 영토 변화.
+ *
+ * `kinds` 를 주면 그 종류만 보여 줍니다.
+ * "점령 로그" 는 captured/contested 만 걸러, 방어 보강(reinforced) 이 점령 기록을
+ * 밀어내 보이지 않게 합니다.
+ */
 export function CampusCaptureLog({
   events,
   tiles,
   limit = 8,
+  kinds,
+  emptyDescription = '세션을 정상 완료하거나 자세를 회복하면 기여도가 쌓이고 지도가 움직여요.',
 }: {
   events: CampusTileEvent[]
   tiles: CampusTile[]
   limit?: number
+  kinds?: CampusTileEvent['kind'][]
+  emptyDescription?: string
 }) {
   const colorOf = useSchoolColor()
   const zoneById = useMemo(() => {
@@ -102,18 +112,18 @@ export function CampusCaptureLog({
     return map
   }, [tiles])
 
-  if (events.length === 0) {
-    return (
-      <EmptyState
-        title="아직 영토 변화가 없어요"
-        description="세션을 정상 완료하거나 자세를 회복하면 기여도가 쌓이고 지도가 움직여요."
-      />
-    )
+  const visible = useMemo(
+    () => (kinds ? events.filter((e) => kinds.includes(e.kind)) : events),
+    [events, kinds],
+  )
+
+  if (visible.length === 0) {
+    return <EmptyState title="아직 영토 변화가 없어요" description={emptyDescription} />
   }
 
   return (
     <ul className="flex flex-col gap-1.5">
-      {events.slice(0, limit).map((event) => {
+      {visible.slice(0, limit).map((event) => {
         const tile = zoneById.get(event.tileId)
         const zoneLabel = tile ? CAMPUS_ZONE_META[tile.zone].label : '캠퍼스'
         const color = colorOf(event.toSchoolId)

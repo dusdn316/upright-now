@@ -130,7 +130,13 @@ export function Campus() {
                 </Button>
               </div>
               <div className="mt-3">
-                <CampusCaptureLog events={snapshot.tileEvents} tiles={snapshot.tiles} />
+                {/* 점령·경합만 — 방어 보강은 전체 기록(/campus/history)에서 봅니다. */}
+                <CampusCaptureLog
+                  events={snapshot.tileEvents}
+                  tiles={snapshot.tiles}
+                  kinds={['captured', 'contested']}
+                  emptyDescription="아직 점령이나 경합이 없어요. 세션을 정상 완료하면 지도가 움직여요."
+                />
               </div>
             </Card>
 

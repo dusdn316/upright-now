@@ -131,6 +131,10 @@ interface ContributionLedger {
 
 - 모든 테이블 `enable row level security`.
 - 쓰기 정책이 아예 없으므로 **다른 학교 데이터·다른 사람 기여를 직접 수정할 수 없습니다.**
+- 두 번째 방어선: Supabase 가 public 스키마 새 테이블에 기본 grant 하는
+  `INSERT/UPDATE/DELETE/TRUNCATE` 를 `anon`·`authenticated` 에서 **회수**했습니다.
+  나중에 허용 정책이 실수로 추가되어도 쓰기가 열리지 않습니다.
+  `campus_memberships`·`campus_contributions` 의 `SELECT` 는 `anon` 에서도 회수했습니다.
 - `campus_record_contribution` 은 `p_school_id` 가 내 membership 과 다르면 거절합니다
   (`school_mismatch`).
 - 다른 사람의 기여 이력·소속은 조회할 수 없습니다. 집계만 security definer RPC 로 공개합니다.

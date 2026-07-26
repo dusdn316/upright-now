@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { loadLocal, saveLocal, STORAGE_KEYS } from '@/lib/storage/local'
 import { MockCampusRepository, resetMockCampusForTest } from './mockRepository'
 import { CONTRIBUTION_POINTS } from './contribution'
-import type { CampusContributionEvent, CampusSnapshot } from './types'
+import type { CampusContributionEvent, CampusSnapshot, CampusTile } from './types'
 
 const NOW = Date.UTC(2026, 6, 20, 3, 0, 0)
 const now = () => NOW
@@ -151,6 +152,42 @@ describe('mock 캠퍼스 저장소', () => {
     expect(after.tileEvents.some((e) => e.kind === 'captured' && e.tileId === neutral.id)).toBe(
       true,
     )
+    repo.dispose()
+  })
+
+  it('다른 탭이 먼저 쓴 갱신을 덮어쓰지 않는다', async () => {
+    const repo = new MockCampusRepository(
+      () => ({ memberId: 'member-a', schoolId: 'snu' }),
+      now,
+    )
+    const snapshot = await repo.load()
+
+    // 다른 탭이 localStorage 에 직접 쓴 상황을 흉내 냅니다.
+    const otherTabTile = snapshot.tiles[50]
+    interface StoredShape {
+      tiles: CampusTile[]
+    }
+    const stored = loadLocal<StoredShape | null>(STORAGE_KEYS.campusMock, null)
+    expect(stored?.tiles).toBeDefined()
+    saveLocal(STORAGE_KEYS.campusMock, {
+      ...stored,
+      tiles: stored!.tiles.map((t) =>
+        t.id === otherTabTile.id ? { ...t, ownerSchoolId: 'korea', defenseScore: 999 } : t,
+      ),
+    })
+
+    // 이 탭은 메모리에 옛 상태를 들고 있지만, 다른 타일에 기여해도
+    // 다른 탭의 갱신이 살아 있어야 합니다.
+    const myTarget = snapshot.tiles.find((t) => t.id !== otherTabTile.id)!
+    const result = await repo.submitContribution(
+      event({ tileId: myTarget.id, eventId: 'cross-tab-1' }),
+    )
+    expect(result.accepted).toBe(true)
+
+    const after = await repo.load()
+    const preserved = after.tiles.find((t) => t.id === otherTabTile.id)!
+    expect(preserved.ownerSchoolId).toBe('korea')
+    expect(preserved.defenseScore).toBe(999)
     repo.dispose()
   })
 
