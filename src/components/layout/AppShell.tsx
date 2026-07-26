@@ -94,6 +94,7 @@ export function PageHeader({
   /** 뒤로가기 — 문자열이면 히스토리 없을 때의 fallback 경로, 함수면 직접 처리 */
   back?: string | (() => void)
 }) {
+  // flex-wrap: 좁은 폭에서 action 이 제목 아래로 내려가 가로 넘침을 막습니다.
   return (
     <header className="mb-6">
       {back !== undefined &&

@@ -22,6 +22,7 @@ import { TextField } from '@/components/ui'
 import { REACTION_LABEL } from '@/features/rooms/roomEvents'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useToast } from '@/app/providers/ToastProvider'
+import { CampusRoomBanner } from '@/components/campus/CampusBits'
 import { Placeholder } from './Placeholder'
 import { FRIEND_ROOM } from '@/constants/copy'
 import type { CharacterStage } from '@/types'
@@ -142,6 +143,12 @@ export function Room() {
           </div>
         </Card>
       )}
+
+      {/*
+        캠퍼스 테마 배너 — 표시 전용입니다.
+        친구 방 연결·Presence·Broadcast·보스 HP 로직은 건드리지 않습니다.
+      */}
+      <CampusRoomBanner />
 
       {room.phase === 'connecting' && (
         <Card>

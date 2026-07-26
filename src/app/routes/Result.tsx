@@ -21,6 +21,10 @@ import { useDemoStore } from '@/features/demo/demoMode'
 import { MONSTER_THEMES, useActiveModeConfig } from '@/features/modes/modeStore'
 import { sanitizeNextAction } from '@/features/sessions/sessionHistoryStore'
 import type { SessionSummary } from '@/types'
+import {
+  CampusProfileBadge,
+  CampusShareCardFrame,
+} from '@/components/campus/CampusBits'
 
 /**
  * S-12 결과 — docs/05, docs/03 UF-12
@@ -238,16 +242,25 @@ export function Result() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <Card tone="yellow">
-            <div className="flex flex-col items-center text-center">
-              <CharacterViewport stage={stage} size={140} />
-              <CardTitle>이번에 얻은 보상</CardTitle>
-              <div className="mt-3 grid w-full grid-cols-2 gap-2">
-                <StatTile label="경험치" value={`${game.sessionXp}`} unit="XP" tone="surface" />
-                <StatTile label="잎사귀" value={`${game.sessionPoints}`} unit="P" tone="surface" />
+          {/*
+            결과 공유 카드 — 캠퍼스 테마가 켜져 있으면 학교 색 테두리가 감쌉니다.
+            플래그가 꺼져 있으면 CampusShareCardFrame 이 자식을 그대로 통과시킵니다.
+          */}
+          <CampusShareCardFrame>
+            <Card tone="yellow">
+              <div className="flex flex-col items-center text-center">
+                <CharacterViewport stage={stage} size={140} />
+                <CardTitle>이번에 얻은 보상</CardTitle>
+                <div className="mt-2 empty:hidden">
+                  <CampusProfileBadge />
+                </div>
+                <div className="mt-3 grid w-full grid-cols-2 gap-2">
+                  <StatTile label="경험치" value={`${game.sessionXp}`} unit="XP" tone="surface" />
+                  <StatTile label="잎사귀" value={`${game.sessionPoints}`} unit="P" tone="surface" />
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          </CampusShareCardFrame>
 
           <Card>
             <CardTitle>이번 목표를 얼마나 진행했나요?</CardTitle>

@@ -9,6 +9,10 @@ import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useDemoStore } from '@/features/demo/demoMode'
 import { resetRewardsForTest } from '@/features/game/rewards'
 import { resetFinalizedForTest } from '@/features/sessions/finalizeSession'
+import { useCampusThemeStore } from '@/features/campus/campusThemeStore'
+import { resetContributionLedgerForTest } from '@/features/campus/recordContribution'
+import { disposeCampus } from '@/features/campus/campusStore'
+import { resetCampusMemberIdForTest } from '@/features/campus/identity'
 
 /**
  * 전체 로컬 데이터 초기화 — 첫 방문 상태로 돌아갑니다.
@@ -29,6 +33,13 @@ export function resetAllData(): void {
   usePostureStore.getState().reset()
   resetRewardsForTest()
   resetFinalizedForTest()
+
+  // 캠퍼스 — 학교 선택·기여 원장·익명 식별자·저장소 연결을 함께 비웁니다.
+  // 플래그가 꺼져 있어도 남은 값이 없도록 항상 호출합니다.
+  useCampusThemeStore.getState().reset()
+  resetContributionLedgerForTest()
+  resetCampusMemberIdForTest()
+  disposeCampus()
 
   // 스토어 reset 이 구독자를 통해 0 값을 다시 저장할 수 있으므로 한 번 더 비웁니다.
   clearLocal()

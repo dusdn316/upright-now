@@ -17,6 +17,8 @@ import { useUserStore } from '@/features/onboarding/userStore'
 import { useCalibrationStore } from '@/features/calibration/calibrationStore'
 import { resetAllData } from '@/features/settings/dataReset'
 import { useToast } from '@/app/providers/ToastProvider'
+import { SchoolPicker } from '@/components/campus/SchoolPicker'
+import { CAMPUS_COPY } from '@/constants/campus'
 import type { Sensitivity } from '@/constants/posture'
 
 /** S-16 설정 — 실제 동작하는 설정 화면 */
@@ -61,7 +63,7 @@ export function Settings() {
         back={ROUTES.home}
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* 닉네임 */}
         <Card>
           <CardTitle>닉네임</CardTitle>
@@ -86,6 +88,29 @@ export function Settings() {
             </Button>
           </div>
         </Card>
+
+        {/*
+          학교 선택 — 캠퍼스 테마/영토전 플래그가 켜질 때만 나타납니다.
+          대학 인증이 없으므로 비공식 테마라는 사실을 카드 안에 그대로 적습니다.
+        */}
+        {featureFlags.campusSchoolPicker && (
+          <Card className="lg:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle>학교 선택 (캠퍼스 테마)</CardTitle>
+              <Badge tone="muted">비공식</Badge>
+            </div>
+            <p className="mt-1 text-xs text-ink-soft">
+              {`${CAMPUS_COPY.unofficialGame} ${CAMPUS_COPY.privacy}`}
+            </p>
+            <div className="mt-4">
+              <SchoolPicker
+                onChanged={() =>
+                  push({ title: '캠퍼스 테마를 바꿨어요.', tone: 'success' })
+                }
+              />
+            </div>
+          </Card>
+        )}
 
         {/* 감지 민감도 */}
         <Card>
