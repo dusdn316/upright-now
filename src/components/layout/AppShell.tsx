@@ -103,8 +103,8 @@ export function PageHeader({
         ) : (
           <BackButton onClick={back} />
         ))}
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-3xl font-bold tracking-tight text-ink">{title}</h1>
           {description && (
             <p className="mt-1.5 text-[15px] text-ink-soft">{description}</p>

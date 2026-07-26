@@ -147,3 +147,23 @@ rollback SQL 은 파일 하단 주석). 실행 전까지 라이브 방은 15/25/
   세션 판정 임계값은 건드리지 않음.
 - **Preview 환경**: Vercel Preview 에 VITE_ENABLE_FRIEND_ROOM/REALTIME/CAMERA
   =true + Supabase URL/ANON_KEY 등록됨 (Production 미변경).
+
+## integration/v1.1-all-features — 통합 Release Candidate (2026-07-27)
+
+- **구성**: fix/core-session-flow(fe7d86d, 코어 전체) + feat/campus-territory-prototype
+  (346e272, 캠퍼스 테마·영토전 프로토타입) 를 `--no-ff` 병합. 상세는
+  `docs/INTEGRATION_STATUS.md` (기준 커밋·충돌 해결·플래그 표·main 병합 전
+  체크리스트) 참조 — 이 문서가 RC 단일 기준.
+- **충돌 원칙**: 코어 우선 + 캠퍼스 기능 전부 보존(union). 병합 직후 잡은
+  결함: Stretch attemptIdRef 컴파일 오류(P0), 캠퍼스 기여 브리지의
+  감지 0초/sticky room 오지급(P1 2건), 전체 초기화의 모드 스토어 누락(P1),
+  캠퍼스 스펙 2건의 결과 화면 가드 미반영(P1) — 모두 수정 커밋됨.
+- **캠퍼스 계약**: 캠퍼스는 표시·기여 전용. 자세 판정·XP(applyReward)·보상
+  경로를 절대 건드리지 않는다. 기여는 recordCampusContribution 단일 진입 +
+  eventId 중복 차단. mock 저장소는 서버 역할이라 로컬 초기화 후에도 eventId
+  기억(중복 적립 방지) — 의도된 동작.
+- **e2e**: 이중 dev 서버 — 5283(캠퍼스 OFF, 기존 회귀·OFF 회귀) /
+  5284(캠퍼스 ON, mock). room-live 는 5283 + .env.local Supabase 로 라이브 검증.
+- **Preview 플래그**: 카메라·친구방·Realtime·캠퍼스 테마/영토전 ON,
+  campus Supabase OFF(mock), QA Lab OFF. Production 미변경.
+- main 병합·Production 배포·campus SQL 실행은 모두 사용자 승인 대기.
