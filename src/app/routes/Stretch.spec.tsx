@@ -72,14 +72,14 @@ describe('스트레칭 완주 보상 — 타이머 0초 + 직접 완료 클릭�
     expect(useProgressionStore.getState().points).toBe(0)
   })
 
-  it('0초 도달 후 완료하고 돌아가기를 누르면 +20 XP / +20P 정확히 1회', () => {
+  it('0초 도달 후 완료하고 돌아가기를 누르면 +10 XP / +10P 정확히 1회', () => {
     renderStretch()
 
     runTimerToZero()
     fireEvent.click(screen.getByText('완료하고 돌아가기'))
 
-    expect(useProgressionStore.getState().xp).toBe(20)
-    expect(useProgressionStore.getState().points).toBe(20)
+    expect(useProgressionStore.getState().xp).toBe(10)
+    expect(useProgressionStore.getState().points).toBe(10)
   })
 
   it('대기실(waiting) 방에서는 공동 방어막을 올리지 않는다', () => {
@@ -89,12 +89,15 @@ describe('스트레칭 완주 보상 — 타이머 0초 + 직접 완료 클릭�
     runTimerToZero()
     fireEvent.click(screen.getByText('완료하고 돌아가기'))
 
-    expect(useProgressionStore.getState().xp).toBe(20)
+    expect(useProgressionStore.getState().xp).toBe(10)
     expect(reportStretchComplete).not.toHaveBeenCalled()
   })
 
   it('진행 중(running) 방에서 완주하면 방어막 반영을 정확히 1회 요청한다', () => {
-    useRoomStore.getState().patch({ roomId: 'room-1', phase: 'running' })
+    // isRoomSessionActive 4중 검사 — 방 id·phase·mode·세션 id 를 모두 맞춥니다.
+    useRoomStore.getState().patch({ roomId: 'room-1', phase: 'running', code: 'AB12CD' })
+    useSessionStore.getState().configure({ mode: 'room' })
+    useSessionStore.getState().start('room-AB12CD')
     renderStretch()
 
     runTimerToZero()

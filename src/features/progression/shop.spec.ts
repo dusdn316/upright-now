@@ -10,43 +10,43 @@ describe('상점 — 구매·장착 (Gate 1)', () => {
     useProgressionStore.getState().reset()
   })
 
-  it('아이템 구성: 과잠 4개 100P · 백팩 3개 80P', () => {
+  it('아이템 구성: 기본 과잠 240P·백팩 180P + 특별 350~400P', () => {
     const jackets = SHOP_ITEMS.filter((i) => i.type === 'jacket')
     const backpacks = SHOP_ITEMS.filter((i) => i.type === 'backpack')
-    expect(jackets).toHaveLength(4)
-    expect(backpacks).toHaveLength(3)
-    expect(jackets.every((i) => i.price === 100)).toBe(true)
-    expect(backpacks.every((i) => i.price === 80)).toBe(true)
+    expect(jackets).toHaveLength(5)
+    expect(backpacks).toHaveLength(4)
+    expect(jackets.filter((i) => i.id !== 'jacket-gold').every((i) => i.price === 240)).toBe(true)
+    expect(backpacks.filter((i) => i.id !== 'backpack-galaxy').every((i) => i.price === 180)).toBe(true)
   })
 
   it('포인트가 부족하면 구매되지 않는다', () => {
-    useProgressionStore.setState({ points: 50 })
+    useProgressionStore.setState({ points: 100 })
     expect(useProgressionStore.getState().purchaseItem(navy.id, navy.price)).toBe(false)
-    expect(useProgressionStore.getState().points).toBe(50)
+    expect(useProgressionStore.getState().points).toBe(100)
     expect(useProgressionStore.getState().inventory).toHaveLength(0)
   })
 
   it('구매하면 포인트가 차감되고 인벤토리에 들어간다', () => {
-    useProgressionStore.setState({ points: 150 })
+    useProgressionStore.setState({ points: 290 })
     expect(useProgressionStore.getState().purchaseItem(navy.id, navy.price)).toBe(true)
     expect(useProgressionStore.getState().points).toBe(50)
     expect(useProgressionStore.getState().inventory).toContain(navy.id)
   })
 
   it('같은 아이템 중복 구매를 막는다', () => {
-    useProgressionStore.setState({ points: 300 })
+    useProgressionStore.setState({ points: 500 })
     useProgressionStore.getState().purchaseItem(navy.id, navy.price)
     expect(useProgressionStore.getState().purchaseItem(navy.id, navy.price)).toBe(false)
-    expect(useProgressionStore.getState().points).toBe(200)
+    expect(useProgressionStore.getState().points).toBe(500 - 240)
     expect(
       useProgressionStore.getState().inventory.filter((id) => id === navy.id),
     ).toHaveLength(1)
   })
 
   it('과잠·백팩을 각각 하나씩 장착하고 해제할 수 있다', () => {
-    useProgressionStore.setState({ points: 500 })
+    useProgressionStore.setState({ points: 700 })
     useProgressionStore.getState().purchaseItem(navy.id, navy.price)
-    useProgressionStore.getState().purchaseItem('jacket-coral', 100)
+    useProgressionStore.getState().purchaseItem('jacket-coral', 240)
     useProgressionStore.getState().purchaseItem(freshman.id, freshman.price)
 
     useProgressionStore.getState().equipItem('jacket', navy.id)

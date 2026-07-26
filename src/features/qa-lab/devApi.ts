@@ -103,7 +103,7 @@ export function createDevApi(): UprightDevApi {
     injectTestCalibration: () => {
       useCalibrationStore.getState().addProfile(makeProfile())
       useUserStore.getState().setCalibrated(true)
-      useRoomStore.getState().patch({ myCameraReady: true })
+      useRoomStore.getState().patch({ myCameraReady: true, myModelReady: true })
     },
 
     getPipState: () => ({

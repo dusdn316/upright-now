@@ -71,7 +71,6 @@ export function TerritoryMap({
       <svg
         viewBox="0 0 120 84"
         className="h-auto w-full"
-        role="group"
         aria-label="가상 캠퍼스 섬 지도"
       >
         {/* 배경 — 최종 이미지는 별도 제작 후 교체 (없으면 자체 SVG 섬) */}

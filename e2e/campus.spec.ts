@@ -60,13 +60,13 @@ test.describe('캠퍼스 주소', () => {
 })
 
 test.describe('캠퍼스 화면', () => {
-  test('학교를 고르면 지도 96칸과 시즌·기여도가 보인다', async ({ page }) => {
+  test('학교를 고르면 섬 지도 36 territory 와 시즌·기여도가 보인다', async ({ page }) => {
     await resetCampusStorage(page)
     await selectSchool(page, 'snu')
     await gotoCampus(page, '/campus')
 
     await expect(page.getByTestId('territory-map')).toBeVisible()
-    await expect(page.getByTestId('territory-tile')).toHaveCount(96)
+    await expect(page.getByTestId('territory-tile')).toHaveCount(36)
     await expect(page.getByText('내 학교', { exact: true })).toBeVisible()
     await expect(page.getByText('점령 타일 수', { exact: true })).toBeVisible()
     await expect(page.getByText('내 기여도', { exact: true })).toBeVisible()

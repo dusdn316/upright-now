@@ -119,7 +119,7 @@ export function Session() {
       }
     }, 1000)
     return () => window.clearInterval(timer)
-  }, [session.status])
+  }, [session.status, sessionId])
 
   // 타이머 정상 종료 → 단일 종료 함수로 atomic 처리 (중복 종료·중복 보상 차단)
   useEffect(() => {
