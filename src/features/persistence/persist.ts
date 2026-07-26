@@ -24,6 +24,8 @@ export function installPersistence(): () => void {
         hasCalibration: s.hasCalibration,
         soundEnabled: s.soundEnabled,
         pipAutoOpen: s.pipAutoOpen,
+        reactionSoundEnabled: s.reactionSoundEnabled,
+        customReactions: s.customReactions,
       }),
     ),
   )
@@ -39,6 +41,8 @@ export function installPersistence(): () => void {
         equipped: s.equipped,
         shopUnlocked: s.shopUnlocked,
         recentXp: s.recentXp,
+        streakClaims: s.streakClaims,
+        badges: s.badges,
       }),
     ),
   )
