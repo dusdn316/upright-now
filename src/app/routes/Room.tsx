@@ -17,7 +17,8 @@ import {
   startRoomSession,
 } from '@/features/rooms/roomService'
 import { useUserStore } from '@/features/onboarding/userStore'
-import { useCalibrationStore } from '@/features/calibration/calibrationStore'
+import { useCalibrationStore, hasValidActiveProfile } from '@/features/calibration/calibrationStore'
+import { DetectionPreflight } from '@/components/room/DetectionPreflight'
 import { TextField } from '@/components/ui'
 import { REACTION_LABEL } from '@/features/rooms/roomEvents'
 import { useSessionStore } from '@/features/sessions/sessionStore'
@@ -37,6 +38,8 @@ export function Room() {
   const hasOnboarded = useUserStore((s) => s.hasOnboarded)
   const setNickname = useUserStore((s) => s.setNickname)
   const myProfiles = useCalibrationStore((s) => s.profiles)
+  const validActiveProfile = useCalibrationStore((s) => hasValidActiveProfile(s))
+  const [preflightOpen, setPreflightOpen] = useState(false)
   const [nicknameDraft, setNicknameDraft] = useState('')
   const needNickname = !hasOnboarded && room.phase === 'idle'
   const startSession = useSessionStore((s) => s.start)
@@ -91,7 +94,7 @@ export function Room() {
     m.cameraReady && m.calibrationReady && m.modelReady && m.userReady
   const bothReady = room.members.length === 2 && room.members.every(fullyReady)
   const myPrereqOk = featureFlags.camera
-    ? room.myCameraReady && myProfiles.length > 0
+    ? room.myCameraReady && room.myModelReady && validActiveProfile
     : true
 
   const copyInvite = async () => {
@@ -248,23 +251,28 @@ export function Room() {
               <div className="mt-4 rounded-2xl bg-surface/80 p-3 text-sm">
                 <p className="font-bold text-ink">시작 전에 준비가 필요해요</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {!room.myCameraReady && (
+                  {!(room.myCameraReady && room.myModelReady) && (
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={async () => {
-                        try {
-                          const stream = await navigator.mediaDevices.getUserMedia({ video: true })
-                          for (const t of stream.getTracks()) t.stop()
-                          useRoomStore.getState().patch({ myCameraReady: true })
+                      onClick={() => setPreflightOpen(true)}
+                      disabled={preflightOpen}
+                    >
+                      카메라·감지 확인
+                    </Button>
+                  )}
+                  {preflightOpen && (
+                    <DetectionPreflight
+                      onDone={(ok, message) => {
+                        setPreflightOpen(false)
+                        if (ok) {
                           void setMyState(me?.state === 'ready' ? 'ready' : 'joining')
-                        } catch {
-                          push({ title: '카메라 권한이 필요해요. 브라우저 설정을 확인해 주세요.', tone: 'warning' })
+                          push({ title: '카메라와 자세 감지가 준비됐어요.', tone: 'success' })
+                        } else if (message) {
+                          push({ title: message, tone: 'warning' })
                         }
                       }}
-                    >
-                      카메라 권한 확인
-                    </Button>
+                    />
                   )}
                   {myProfiles.length === 0 && (
                     <Button

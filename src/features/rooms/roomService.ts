@@ -14,7 +14,7 @@ import { useRoomStore, type MemberState } from './roomStore'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { xpToStage } from '@/features/progression/growth'
 import { useProgressionStore } from '@/features/progression/progressionStore'
-import { useCalibrationStore } from '@/features/calibration/calibrationStore'
+import { useCalibrationStore, hasValidActiveProfile } from '@/features/calibration/calibrationStore'
 import { featureFlags } from '@/lib/feature-flags/flags'
 
 /**
@@ -48,8 +48,10 @@ function myPresence(state: MemberState) {
     backpackId: prog.equipped.backpackId,
     // 준비 상태 — 자세 상태(good/bad 등)는 절대 넣지 않습니다.
     cameraReady: !cameraOn || store().myCameraReady,
-    calibrationReady: !cameraOn || cal.profiles.length > 0,
-    modelReady: !cameraOn || cal.profiles.length > 0, // 기준 등록 = 모델 검증 완료
+    // 프로필 개수가 아니라 "유효한 활성 기준"을 요구합니다.
+    calibrationReady: !cameraOn || hasValidActiveProfile(cal),
+    // 감지 사전 점검(모델 로드 + 1.5초 유효 랜드마크) 통과 여부
+    modelReady: !cameraOn || store().myModelReady,
     userReady: state === 'ready',
   }
 }

@@ -78,6 +78,7 @@ export function Session() {
   // 분류기가 영영 unstable 만 내므로, 프로필 실존 여부까지 확인합니다.
   const hasProfile = useCalibrationStore((s) => hasValidActiveProfile(s))
   const calProfileCount = useCalibrationStore((s) => s.profiles.length)
+  const activeProfileName = useCalibrationStore((s) => s.profile?.name ?? null)
   // 저장 유실(프로필 0개) 전용 — 미선택 상태는 아래 idle 가드가 안내합니다.
   const missingProfile =
     featureFlags.camera && hasCalibration && calProfileCount === 0 && !isDemo
@@ -468,6 +469,21 @@ export function Session() {
           tone={isBad ? 'coral' : 'pink'}
           className="transition-colors duration-300"
         >
+          {isRoomSession && (
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-surface/70 px-3 py-2 text-[11px] text-ink-soft">
+              <span className="font-bold text-ink">내 기기 감지</span>
+              <span>{camera.status === 'ready' ? '카메라 연결됨' : '카메라 꺼짐'}</span>
+              <span>{`기준: ${activeProfileName ?? '없음'}`}</span>
+              <span>
+                {snapshot.quality === 'good'
+                  ? '측정 가능'
+                  : snapshot.quality === 'limited'
+                    ? '일부만 보임'
+                    : '연결 끊김'}
+              </span>
+              <span className="text-muted">이 정보는 친구에게 전송되지 않아요.</span>
+            </div>
+          )}
           {isRoomSession ? (
             /* 친구 방: [내 캐릭터] [공동 괴물 + HP] [친구 캐릭터] */
             <CoopArena bossHitTick={bossHitTick} />

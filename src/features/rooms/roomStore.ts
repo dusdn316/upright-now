@@ -63,6 +63,8 @@ interface RoomStoreState {
   friendAttackTick: number
   /** 내 카메라 권한 확인 여부 (presence 로만 공유) */
   myCameraReady: boolean
+  /** 감지 사전 점검(모델 로드+1.5초 유효 랜드마크) 통과 */
+  myModelReady: boolean
   /** 기린 싱크 연출 트리거 */
   syncFlashAt: number | null
   reactions: ReactionFeedItem[]
@@ -94,6 +96,7 @@ const initialState = {
   syncFlashAt: null,
   friendAttackTick: 0,
   myCameraReady: false,
+  myModelReady: false,
   reactions: [] as ReactionFeedItem[],
   lastFriendEvent: null,
 }
