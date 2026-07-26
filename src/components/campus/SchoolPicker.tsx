@@ -33,6 +33,9 @@ export function SchoolPicker({
   const groupName = useId()
   const schoolId = useCampusThemeStore((s) => s.schoolId)
   const customColor = useCampusThemeStore((s) => s.customColor)
+  const customSchoolName = useCampusThemeStore((s) => s.customSchoolName)
+  const customSchoolShortName = useCampusThemeStore((s) => s.customSchoolShortName)
+  const setCustomSchoolName = useCampusThemeStore((s) => s.setCustomSchoolName)
   const selectSchool = useCampusThemeStore((s) => s.selectSchool)
   const setCustomColor = useCampusThemeStore((s) => s.setCustomColor)
   const checkChange = useCampusThemeStore((s) => s.checkChange)
@@ -134,6 +137,33 @@ export function SchoolPicker({
           })}
         </div>
       </fieldset>
+
+      {/* 기타 / 직접 설정 — 학교 이름 직접 입력 (비공식) */}
+      {schoolId === 'custom' && (
+        <div className="mb-3 flex flex-wrap items-end gap-2 text-sm">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-ink-soft">학교 이름 (2~30자)</span>
+            <input
+              maxLength={30}
+              value={customSchoolName}
+              onChange={(e) => setCustomSchoolName(e.target.value, customSchoolShortName)}
+              className="h-9 w-52 rounded-xl border border-line bg-surface px-2"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-semibold text-ink-soft">짧은 표기 (2~8자)</span>
+            <input
+              maxLength={8}
+              value={customSchoolShortName}
+              onChange={(e) => setCustomSchoolName(customSchoolName, e.target.value)}
+              className="h-9 w-28 rounded-xl border border-line bg-surface px-2"
+            />
+          </label>
+          <p className="w-full text-[11px] text-ink-soft">
+            사용자가 직접 입력한 비공식 학교 정보입니다.
+          </p>
+        </div>
+      )}
 
       {/* 기타 / 직접 설정 — 색 직접 선택 */}
       {schoolId === CUSTOM_SCHOOL_ID && (

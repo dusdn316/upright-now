@@ -21,6 +21,10 @@ import type { CampusThemeTokens } from './types'
 interface CampusThemePersisted {
   schoolId: string | null
   customColor: string
+  /** 기타/직접 설정 학교의 표시 이름 (2~30자, sanitize 후 저장) */
+  customSchoolName: string
+  /** 배지 등 짧은 표기 (2~8자) */
+  customSchoolShortName: string
   lastChangedAt: number | null
   lastChangedSeasonId: string | null
   changesInSeason: number
@@ -33,6 +37,8 @@ interface CampusThemeState extends CampusThemePersisted {
   selectSchool: (schoolId: string, now?: number) => SchoolChangeDecision
   /** 기타 / 직접 설정의 색만 바꿉니다. 학교 변경 제한과 무관합니다. */
   setCustomColor: (color: string) => boolean
+  /** 기타 학교 이름 설정 — sanitize 후 저장. 학교 변경 제한과 무관 */
+  setCustomSchoolName: (name: string, shortName: string) => void
   setTargetTile: (tileId: string | null) => void
   /** 지금 학교를 바꿀 수 있는지 미리 확인합니다. */
   checkChange: (schoolId: string, now?: number) => SchoolChangeDecision
@@ -42,6 +48,8 @@ interface CampusThemeState extends CampusThemePersisted {
 const initialState: CampusThemePersisted = {
   schoolId: null,
   customColor: CUSTOM_DEFAULT_COLOR,
+  customSchoolName: '',
+  customSchoolShortName: '',
   lastChangedAt: null,
   lastChangedSeasonId: null,
   changesInSeason: 0,
@@ -56,6 +64,8 @@ function persist(state: CampusThemePersisted): void {
   saveLocal(STORAGE_KEYS.campus, {
     schoolId: state.schoolId,
     customColor: state.customColor,
+    customSchoolName: state.customSchoolName,
+    customSchoolShortName: state.customSchoolShortName,
     lastChangedAt: state.lastChangedAt,
     lastChangedSeasonId: state.lastChangedSeasonId,
     changesInSeason: state.changesInSeason,
@@ -107,6 +117,19 @@ export const useCampusThemeStore = create<CampusThemeState>((set, get) => ({
     set(next)
     persist(next)
     return decision
+  },
+
+  setCustomSchoolName: (name, shortName) => {
+    const next = {
+      ...get(),
+      customSchoolName: sanitizeSchoolName(name, 30),
+      customSchoolShortName: sanitizeSchoolName(shortName, 8),
+    }
+    persist(next)
+    set({
+      customSchoolName: next.customSchoolName,
+      customSchoolShortName: next.customSchoolShortName,
+    })
   },
 
   setCustomColor: (color) => {
