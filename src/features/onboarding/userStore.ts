@@ -59,6 +59,10 @@ const persisted = loadLocal(STORAGE_KEYS.user, initialState)
 export const useUserStore = create<UserStoreState>((set) => ({
   ...initialState,
   ...persisted,
+  // 구버전 저장분에는 없는 신규 필드 — undefined 덮어쓰기 방지
+  customReactions: (persisted as { customReactions?: string[] }).customReactions ?? [],
+  reactionSoundEnabled:
+    (persisted as { reactionSoundEnabled?: boolean }).reactionSoundEnabled ?? true,
 
   setNickname: (value) =>
     set({ nickname: normalizeNickname(value), hasOnboarded: true }),

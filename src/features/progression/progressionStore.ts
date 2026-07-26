@@ -63,6 +63,9 @@ export const useProgressionStore = create<ProgressionStoreState>((set, get) => (
   ...initialState,
   ...persisted,
   recentXp: persisted.recentXp ?? [],
+  // 구버전 저장분에는 없는 신규 필드 — undefined 덮어쓰기 방지
+  streakClaims: persisted.streakClaims ?? [],
+  badges: persisted.badges ?? [],
 
   addXp: (amount) => set((s) => ({ xp: s.xp + Math.max(0, amount) })),
 

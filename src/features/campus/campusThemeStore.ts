@@ -85,6 +85,9 @@ function historyOf(state: CampusThemePersisted): SchoolChangeHistory {
 export const useCampusThemeStore = create<CampusThemeState>((set, get) => ({
   ...initialState,
   ...persisted,
+  // 구버전 저장분 가드 — 신규 필드 undefined 방지
+  customSchoolName: persisted.customSchoolName ?? '',
+  customSchoolShortName: persisted.customSchoolShortName ?? '',
 
   checkChange: (schoolId, now = Date.now()) => {
     const season = seasonAt(now)
