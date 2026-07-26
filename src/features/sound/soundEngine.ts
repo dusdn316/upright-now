@@ -26,6 +26,7 @@ export type SoundEventId =
   | 'reaction_received'
   | 'giraffe_sync'
   | 'coop_attack'
+  | 'monster_evolve'
 
 interface SoundSpec {
   /** 나중에 실제 음원으로 교체할 때 채우는 자리 (현재는 synth 사용) */
@@ -48,6 +49,7 @@ export const SOUND_MANIFEST: Record<SoundEventId, SoundSpec> = {
   reaction_received: { file: null, tones: [[698, 0], [880, 0.07]], durSec: 0.18, wave: 'triangle', gain: 0.07 },
   giraffe_sync: { file: null, tones: [[523, 0], [659, 0.08], [880, 0.16]], durSec: 0.3, wave: 'triangle', gain: 0.09 },
   coop_attack: { file: null, tones: [[330, 0], [247, 0.07]], durSec: 0.18, wave: 'square', gain: 0.05 },
+  monster_evolve: { file: null, tones: [[196, 0], [262, 0.1], [330, 0.2]], durSec: 0.34, wave: 'triangle', gain: 0.08 },
 }
 
 const SOFT_EVENTS: SoundEventId[] = [
@@ -56,6 +58,7 @@ const SOFT_EVENTS: SoundEventId[] = [
   'boss_hit',
   'session_complete',
   'level_up',
+  'monster_evolve',
 ]
 
 export const PACK_EVENTS: Record<'silent' | 'soft' | 'social', SoundEventId[]> = {

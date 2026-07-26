@@ -7,6 +7,7 @@ import { installDevApi } from '@/features/qa-lab/devApi'
 import { installPersistence } from '@/features/persistence/persist'
 import { unlockAudio } from '@/features/sound/soundEngine'
 import { installSoundTriggers } from '@/features/sound/soundTriggers'
+import { installMonsterBridge } from '@/features/game/monsterBridge'
 import { CampusThemeRoot } from '@/components/campus/CampusThemeRoot'
 import { CampusContributionBridge } from '@/features/campus/CampusContributionBridge'
 import { installCampusDevApi } from '@/features/campus/campusDevApi'
@@ -26,10 +27,12 @@ export function App() {
     // 효과음: 사용자 제스처 후에만 AudioContext 시작 (자동 재생 금지)
     window.addEventListener('pointerdown', unlockAudio)
     const uninstallSound = installSoundTriggers()
+    const uninstallMonster = installMonsterBridge()
     return () => {
       uninstall()
       window.removeEventListener('pointerdown', unlockAudio)
       uninstallSound()
+      uninstallMonster()
     }
   }, [])
 

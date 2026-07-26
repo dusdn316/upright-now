@@ -36,7 +36,7 @@ import { MiniPostureWidget } from '@/components/session/MiniPostureWidget'
 import { CoopArena } from '@/components/game/CoopArena'
 import { useAttackSequence } from '@/features/game/useAttackSequence'
 import { MONSTER_THEMES, useActiveModeConfig } from '@/features/modes/modeStore'
-import { DAMAGE } from '@/constants/game'
+import { DAMAGE, FOCUS_ATTACK_INTERVAL_MS } from '@/constants/game'
 
 /**
  * 언마운트 안전망 타이머 — StrictMode 의 즉시 재마운트에서는 다음 마운트가
@@ -110,6 +110,12 @@ export function Session() {
       useSessionStore
         .getState()
         .tick(1000, usePostureStore.getState().snapshot.state)
+      // 유효 감지 집중 5분마다 괴물 자동 공격 (자세를 무너뜨릴 필요 없음)
+      const det = useSessionStore.getState().detectableMs
+      const n = Math.floor(det / FOCUS_ATTACK_INTERVAL_MS)
+      if (n > 0) {
+        useGameStore.getState().focusAttack(`focus-${sessionId}-${n}`)
+      }
     }, 1000)
     return () => window.clearInterval(timer)
   }, [session.status])

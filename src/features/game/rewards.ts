@@ -18,16 +18,22 @@ export type RewardType =
   | 'session_completed'
   | 'stretch_completed'
   | 'goal_completed'
+  | 'friend_session_bonus'
 
 const REWARD_TABLE: Record<RewardType, { xp: number; points: number }> = {
   recovery_success: REWARD.recovery,
   session_completed: REWARD.sessionCompleted,
   stretch_completed: REWARD.stretch,
   goal_completed: REWARD.goalCompleted,
+  friend_session_bonus: REWARD.roomCompleted,
 }
 
 /** 세션 중 화면 집계(획득 XP·잎사귀)에 반영되는 종류 */
-const SESSION_SCOPED: RewardType[] = ['recovery_success', 'session_completed']
+const SESSION_SCOPED: RewardType[] = [
+  'recovery_success',
+  'session_completed',
+  'friend_session_bonus',
+]
 
 /** 최근 획득 XP 목록에 남길 이름 */
 const REWARD_LABEL: Record<RewardType, string> = {
@@ -35,6 +41,7 @@ const REWARD_LABEL: Record<RewardType, string> = {
   session_completed: '세션 완주',
   stretch_completed: '스트레칭',
   goal_completed: '목표 완료',
+  friend_session_bonus: '친구 공동 완주',
 }
 
 const appliedIds = new Set<string>()
@@ -58,6 +65,8 @@ export interface RewardInput {
   id: string
   sessionId: string
   type: RewardType
+  /** 길이별 세션 완주처럼 표 대신 쓸 지급량 (경제 v2) */
+  override?: { xp: number; points: number }
 }
 
 export interface RewardOutcome {
@@ -81,7 +90,7 @@ export function applyReward(input: RewardInput): RewardOutcome {
     idsBySession.set(sessionId, ids)
   }
 
-  let { xp, points } = REWARD_TABLE[type]
+  let { xp, points } = input.override ?? REWARD_TABLE[type]
   let capped = false
 
   if (type === 'recovery_success') {

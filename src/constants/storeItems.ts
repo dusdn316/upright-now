@@ -21,7 +21,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     type: 'jacket',
     name: '네이비 과잠',
     description: '차분한 캠퍼스의 상징색.',
-    price: 100,
+    price: 240,
     color: '#1F3A5F',
   },
   {
@@ -29,7 +29,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     type: 'jacket',
     name: '버건디 과잠',
     description: '깊고 따뜻한 버건디.',
-    price: 100,
+    price: 240,
     color: '#7A2E3D',
   },
   {
@@ -37,7 +37,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     type: 'jacket',
     name: '포레스트 과잠',
     description: '숲처럼 편안한 그린.',
-    price: 100,
+    price: 240,
     color: '#2E5D3E',
   },
   {
@@ -45,7 +45,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     type: 'jacket',
     name: '코랄 과잠',
     description: '눈에 띄는 활력의 코랄.',
-    price: 100,
+    price: 240,
     color: '#FF6464',
   },
   {
@@ -53,7 +53,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     type: 'backpack',
     name: '새내기 백팩',
     description: '설렘 가득한 첫 학기.',
-    price: 80,
+    price: 180,
     icon: 'bag',
   },
   {
@@ -61,7 +61,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     type: 'backpack',
     name: '도서관 백팩',
     description: '책과 노트북이 딱 맞게.',
-    price: 80,
+    price: 180,
     icon: 'book',
   },
   {
@@ -69,7 +69,7 @@ export const SHOP_ITEMS: ShopItem[] = [
     type: 'backpack',
     name: '팀플 백팩',
     description: '같이 들면 가볍다.',
-    price: 80,
+    price: 180,
     icon: 'friends',
   },
 ]
@@ -77,3 +77,24 @@ export const SHOP_ITEMS: ShopItem[] = [
 export function getShopItem(id: string | undefined): ShopItem | undefined {
   return SHOP_ITEMS.find((item) => item.id === id)
 }
+
+/** 특별 아이템 — 경제 v2 (350~400P 프리미엄 구간) */
+export const SPECIAL_ITEMS: ShopItem[] = [
+  {
+    id: 'jacket-gold',
+    type: 'jacket',
+    name: '황금 과잠',
+    description: '연속 출석의 상징. 반짝임 주의.',
+    price: 400,
+    color: '#f2c94c',
+  },
+  {
+    id: 'backpack-galaxy',
+    type: 'backpack',
+    name: '은하 백팩',
+    description: '밤샘의 별들을 담았어요.',
+    price: 350,
+    icon: 'chart',
+  },
+]
+SPECIAL_ITEMS.forEach((item) => SHOP_ITEMS.push(item))

@@ -31,6 +31,8 @@ export function CampusContributionBridge() {
       lastStatus = state.status
       if (previous === 'completed' || state.status !== 'completed') return
       if (useDemoStore.getState().isDemo) return
+      // 1분 빠른 점검은 캠퍼스 기여를 만들지 않습니다.
+      if (state.lengthId === 'test') return
       // 감지 0초(비데모) 세션은 finalizeSession 이 곧 aborted 로 뒤집습니다.
       // 타이머 tick 이 먼저 completed 를 쏘므로 여기서도 같은 조건으로 거릅니다.
       if (state.detectableMs === 0) return

@@ -9,6 +9,7 @@ import { registerSessionLockRelease } from './sessionLocks'
 import { isRoomSessionActive } from '@/features/rooms/roomStore'
 import { reportSessionComplete } from '@/features/rooms/roomService'
 import { kstDateKey } from '@/lib/time/kst'
+import { sessionCompletionReward } from '@/constants/game'
 
 /**
  * 세션 종료의 단일 진입점 — atomic 하게 한 번만 실행됩니다.
@@ -63,12 +64,21 @@ export function finalizeSession(reason: 'timer' | 'manual'): {
     if (isRoomSessionActive()) {
       void reportSessionComplete()
     }
-    // 완주 보상 — 반드시 applyReward 를 통해서만
+    // 완주 보상 — 반드시 applyReward 를 통해서만 (경제 v2: 길이별)
     applyReward({
       id: `session-complete-xp-${sessionId}`,
       sessionId,
       type: 'session_completed',
+      override: sessionCompletionReward(Math.round(session.plannedMs / 60000)),
     })
+    // 친구 방 공동 완주 추가 보너스 (세션당 1회)
+    if (isRoomSessionActive()) {
+      applyReward({
+        id: `friend-bonus-${sessionId}`,
+        sessionId,
+        type: 'friend_session_bonus',
+      })
+    }
     if (!isDemo) {
       // 출석 날짜는 KST 기준으로 통일합니다.
       useProgressionStore.getState().completeSessionMark(kstDateKey())
