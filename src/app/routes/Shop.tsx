@@ -51,6 +51,7 @@ export function Shop() {
         <PageHeader
           title="상점"
           description="모은 잎사귀로 대학 컬러 과잠과 캠퍼스 백팩을 고를 수 있어요."
+          back={ROUTES.home}
         />
         <EmptyState
           title="첫 세션을 완료하면 상점이 열려요"
@@ -75,52 +76,64 @@ export function Shop() {
     const affordable = points >= item.price
 
     return (
-      <Card key={item.id} className={isEquipped ? 'ring-2 ring-pink/50' : ''}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            {item.type === 'jacket' ? (
-              <span
-                aria-hidden="true"
-                className="h-9 w-9 rounded-xl border border-line"
-                style={{ backgroundColor: item.color }}
+      <Card
+        key={item.id}
+        className={['min-h-[170px]', isEquipped ? 'ring-2 ring-pink/50' : ''].join(' ')}
+      >
+        <div className="flex min-w-0 items-start gap-3">
+          {/*
+            구매 전에도 현재 캐릭터 단계가 이 아이템만 착용한 실제 모습.
+            preview 는 progression store 를 읽기만 하며 절대 바꾸지 않습니다.
+            이미지 실패 시 CharacterWithGear 가 기존 색·아이콘 폴백을 씁니다.
+          */}
+          <div
+            data-testid={`shop-preview-${item.id}`}
+            className="h-[88px] w-[88px] shrink-0 sm:h-[112px] sm:w-[112px]"
+          >
+            <div className="origin-top-left scale-[0.7857] sm:scale-100">
+              <CharacterWithGear
+                stage={stage}
+                size={112}
+                ignoreCurrentlyEquipped
+                previewJacketId={item.type === 'jacket' ? item.id : null}
+                previewBackpackId={item.type === 'backpack' ? item.id : null}
               />
-            ) : (
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-canvas text-ink">
-                <Icon name={item.icon ?? 'bag'} size={20} />
-              </span>
-            )}
-            <div>
-              <p className="text-sm font-bold text-ink">{item.name}</p>
-              <p className="text-xs text-ink-soft">{item.description}</p>
             </div>
           </div>
-          {isEquipped ? (
-            <Badge tone="pink">장착 중</Badge>
-          ) : owned ? (
-            <Badge tone="green">보유</Badge>
-          ) : (
-            <Badge tone="yellow">
-              <Icon name="leaf" size={12} />
-              {`${item.price}P`}
-            </Badge>
-          )}
-        </div>
 
-        <div className="mt-3 flex gap-2">
-          {!owned ? (
-            <Button size="sm" fullWidth disabled={!affordable} onClick={() => buy(item)}>
-              {affordable ? '구매' : '포인트 부족'}
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              fullWidth
-              variant={isEquipped ? 'secondary' : 'primary'}
-              onClick={() => toggleEquip(item)}
-            >
-              {isEquipped ? '장착 해제' : '장착'}
-            </Button>
-          )}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm font-bold text-ink">{item.name}</p>
+              {isEquipped ? (
+                <Badge tone="pink">장착 중</Badge>
+              ) : owned ? (
+                <Badge tone="green">보유</Badge>
+              ) : (
+                <Badge tone="yellow">
+                  <Icon name="leaf" size={12} />
+                  {`${item.price}P`}
+                </Badge>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs text-ink-soft">{item.description}</p>
+
+            <div className="mt-auto pt-3">
+              {!owned ? (
+                <Button size="sm" fullWidth disabled={!affordable} onClick={() => buy(item)}>
+                  {affordable ? '구매' : '포인트 부족'}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  fullWidth
+                  variant={isEquipped ? 'secondary' : 'primary'}
+                  onClick={() => toggleEquip(item)}
+                >
+                  {isEquipped ? '장착 해제' : '장착'}
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </Card>
     )
@@ -143,6 +156,7 @@ export function Shop() {
       <PageHeader
         title="상점"
         description="모은 잎사귀로 캠퍼스 스타일을 골라보세요."
+        back={ROUTES.home}
         action={
           <Badge tone="yellow" className="text-sm">
             <Icon name="leaf" size={14} />

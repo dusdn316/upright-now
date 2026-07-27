@@ -3,6 +3,7 @@ import { GrowthTimeline } from '@/components/character/GrowthTimeline'
 import { CharacterWithGear } from '@/components/character/CharacterWithGear'
 import { Badge, Card, CardTitle, StatTile } from '@/components/ui'
 import { Icon } from '@/components/ui/Icon'
+import { ROUTES } from '@/constants/routes'
 import { getStageProgress } from '@/features/progression/growth'
 import {
   useCharacterStage,
@@ -21,6 +22,7 @@ export function Growth() {
       <PageHeader
         title="성장"
         description="바른 자세로 회복할 때마다 쌓인 경험치로 6단계 캐릭터가 성장해요."
+        back={ROUTES.home}
       />
 
       <Card tone="blue" className="mb-4">

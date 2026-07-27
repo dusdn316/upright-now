@@ -51,12 +51,27 @@ describe('필수·선택 랜드마크 분리 (긴급 안정화 B)', () => {
     expect(analysis.bothShouldersOk).toBe(false)
   })
 
-  it('얼굴을 크게 옆으로 돌리면 severeRotation 으로 잡힌다', () => {
+  it('얼굴을 크게 옆으로 돌리면 severeRotation(측정 제한) 으로 잡힌다', () => {
     const analysis = analyzeLandmarks(
-      makeLandmarks({ move: { nose: { dx: 0.04 } } }),
+      makeLandmarks({ move: { nose: { dx: 0.05 } } }),
     )!
-    expect(analysis.yawRatio).toBeGreaterThan(0.7)
+    expect(analysis.yawRatio).toBeGreaterThan(0.9)
     expect(analysis.severeRotation).toBe(true)
+  })
+
+  it('중간 정도 고개 돌림은 코 기반 특징만 제외하고 bad 로 판정하지 않는다', () => {
+    // 두 번째 모니터를 보는 정도의 곁눈질 — 코만 옆으로 이동
+    const analysis = analyzeLandmarks(
+      makeLandmarks({ move: { nose: { dx: 0.03 } } }),
+    )!
+    expect(analysis.severeRotation).toBe(false)
+    expect(analysis.moderateRotation).toBe(true)
+    expect(analysis.features.lateralOffsetRatio).toBeUndefined()
+    expect(analysis.excluded.lateralOffsetRatio).toBeTruthy()
+
+    const votes = computeVotes(analysis.features, profile, 'default', false)
+    expect(votes.voteWarning).toBe(false)
+    expect(votes.voteBad).toBe(false)
   })
 })
 
@@ -69,12 +84,13 @@ describe('투표 판정 (긴급 안정화 E)', () => {
   })
 
   it('한 특징만 소폭 튀면 warning 투표는 되지만 bad 는 아니다', () => {
-    // 코를 옆으로 → lateralOffsetRatio 만 이탈 (tolerance 0.07, +0.09/0.24=0.375 → dev≈... )
+    // 머리 전체가 옆으로(코+눈 함께 → yaw 0) → lateralOffsetRatio 만 이탈
+    // (tolerance 바닥 0.10, 0.03/0.24=0.125 → dev 1.25)
     const votes = votesFor({
       move: {
-        nose: { dx: 0.022 },
-        leftEyeOuter: { dx: 0.022 },
-        rightEyeOuter: { dx: 0.022 },
+        nose: { dx: 0.03 },
+        leftEyeOuter: { dx: 0.03 },
+        rightEyeOuter: { dx: 0.03 },
       },
     })
     expect(votes.primaryExceedCount).toBe(1)
@@ -111,15 +127,19 @@ describe('투표 판정 (긴급 안정화 E)', () => {
     expect(withLimited.voteBad).toBe(false)
   })
 
-  it('z(forwardDepth)만 튀면 warning 도 bad 도 아니다', () => {
+  it('z(forwardDepth)만 튀면 warning 도 bad 도 아니고 good 복귀도 막지 않는다', () => {
     const votes = votesFor({ move: { nose: { dz: -0.6 } } })
     const aux = votes.details.find((d) => d.key === 'forwardDepthRatio')
     expect(aux?.exceeded).toBe(true)
     expect(votes.voteWarning).toBe(false)
     expect(votes.voteBad).toBe(false)
+    // z 는 good 복귀의 거부권이 없습니다 — 주 특징이 모두 기준 안이면 good.
+    expect(votes.voteGood).toBe(true)
   })
 
-  it('z 는 주 특징 1개와 함께라면 bad 의 두 번째 표가 될 수 있다', () => {
+  it('z 는 주 특징 1개와 함께여도 bad 의 두 번째 표가 되지 않는다 (보조 신호)', () => {
+    // 실카메라의 z 는 조명·거리에 따라 흘러다녀 marginal 한 주 특징을
+    // bad 로 승격시키던 오탐 원인이었습니다.
     const votes = votesFor({
       move: {
         nose: { dz: -0.6 },
@@ -129,7 +149,30 @@ describe('투표 판정 (긴급 안정화 E)', () => {
     })
     expect(votes.primaryExceedCount).toBe(1)
     expect(votes.auxExceedCount).toBe(1)
-    expect(votes.voteBad).toBe(true)
+    expect(votes.voteWarning).toBe(true)
+    expect(votes.voteBad).toBe(false)
+  })
+
+  it('편안한 자세의 미세 흔들림은 30초가 지나도 good 을 유지한다', () => {
+    // 12fps × 30초, 프레임마다 작은 흔들림(머리 ±1%, 상하 ±0.5%)을 주입
+    let arbiter = createArbiter()
+    let becameNonGood = false
+    for (let frame = 0; frame < 12 * 30; frame += 1) {
+      const wobble = frame % 4
+      const dx = (wobble === 0 ? 1 : wobble === 2 ? -1 : 0) * 0.01
+      const dy = (wobble === 1 ? 1 : wobble === 3 ? -1 : 0) * 0.005
+      const votes = votesFor({
+        move: {
+          nose: { dx, dy },
+          leftEyeOuter: { dx, dy },
+          rightEyeOuter: { dx, dy },
+        },
+      })
+      arbiter = arbiterStep(arbiter, votes, (frame * 1000) / 12)
+      if (arbiter.current !== 'good') becameNonGood = true
+    }
+    expect(becameNonGood).toBe(false)
+    expect(arbiter.current).toBe('good')
   })
 })
 

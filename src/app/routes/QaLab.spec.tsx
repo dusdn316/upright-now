@@ -23,13 +23,19 @@ function resetAll() {
   useGameStore.getState().reset()
   usePostureStore.getState().reset()
   useDemoStore.getState().disableDemo()
+  // disableDemo 는 이제 "데모 진입 전 상태 복원"이라, 테스트 격리를 위해
+  // 사용자·성장 스토어를 명시적으로 초기화합니다.
+  useProgressionStore.getState().reset()
+  useUserStore.getState().reset()
   resetRewardsForTest()
 }
 
 describe('QA Lab mock 상태 → 게임 반응 (Phase 1 핵심 흐름)', () => {
   beforeEach(resetAll)
 
-  it('상태를 주입하면 자세 문구와 캐릭터 상태가 함께 바뀐다', async () => {
+  // 파일의 첫 테스트가 App 전체 transform 비용을 떠안아 느린 환경에서
+  // 기본 5초를 살짝 넘길 수 있습니다. (단언 실패가 아니라 셋업 시간 문제)
+  it('상태를 주입하면 자세 문구와 캐릭터 상태가 함께 바뀐다', { timeout: 15_000 }, async () => {
     const user = userEvent.setup()
     renderAt('/lab')
 
@@ -115,10 +121,10 @@ describe('대시보드', () => {
     expect(screen.queryByText('데모 기린')).not.toBeInTheDocument()
   })
 
-  it('데모 모드에서만 데모 배지를 보여준다', () => {
+  it('데모 모드에서만 데모 종료 버튼을 보여준다', () => {
     useDemoStore.getState().enableDemo()
     renderAt('/')
 
-    expect(screen.getByText('데모')).toBeInTheDocument()
+    expect(screen.getByText('데모 종료')).toBeInTheDocument()
   })
 })

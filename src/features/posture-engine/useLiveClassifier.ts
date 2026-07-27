@@ -8,7 +8,7 @@ import {
   isDistanceMismatch,
   type ArbiterState,
 } from './classify'
-import { MIN_SHOULDER_WIDTH } from './features'
+import { MIN_SHOULDER_WIDTH, type FeatureKey } from './features'
 import { usePostureStore } from './postureStore'
 import { usePostureDebugStore } from './postureDebugStore'
 import { useCalibrationStore } from '@/features/calibration/calibrationStore'
@@ -19,17 +19,27 @@ import type { DetectionQuality } from '@/types'
  *
  * - 귀·엉덩이·z 가 없어도 unavailable 로 만들지 않습니다 → limited 로 계속 판정.
  * - 마지막 신뢰 상태를 800ms 유지해 한 프레임 누락으로 깜빡이지 않게 합니다.
- * - 어깨 너비가 기준보다 20% 이상 2초 지속으로 달라지면 bad 대신
- *   "카메라 거리 확인" 안내를 냅니다.
- * - 비디오가 1.5초 이상 멈추면 unavailable 처리합니다.
+ * - 어깨 너비가 기준보다 35% 이상 3초 지속으로 달라지면 bad 대신
+ *   "카메라 거리 확인" 안내를 냅니다. (특징은 어깨 너비로 정규화되어
+ *   의자에 기대는 정도의 거리 변화(±20%대)에는 기준이 그대로 유효합니다)
+ * - 비디오가 2.5초 이상 멈추면 unavailable 처리합니다.
+ *   (백그라운드 탭에서 브라우저가 타이머를 늦춰도 바로 튀지 않도록 여유)
+ * - 특징값은 EMA 로 스무딩합니다. 캘리브레이션 기준은 5초 중앙값인데
+ *   세션은 raw 단일 프레임을 쓰면 자연 흔들림이 전부 이탈로 계산되던
+ *   비대칭을 없앱니다. (12fps 기준 시간상수 ~0.25초 — bad 5초 확정에
+ *   영향을 주지 않습니다)
  */
 const HOLD_LAST_MS = 800
 const AWAY_MISS_FRAMES = 8
-const DISTANCE_TOLERANCE = 0.2
-const DISTANCE_HOLD_MS = 2000
-const STALE_MS = 1500
+const DISTANCE_TOLERANCE = 0.35
+const DISTANCE_HOLD_MS = 3000
+const STALE_MS = 2500
 /** 판정을 계속하기 위한 최소 신뢰(주) 특징 수 */
 const MIN_TRUSTED_FEATURES = 2
+/** 특징 EMA 계수 — 프레임 간 지터 흡수용 */
+const EMA_ALPHA = 0.35
+/** 이 시간 이상 프레임이 끊기면 EMA 를 새로 시작합니다. */
+const EMA_RESET_GAP_MS = 2000
 
 export function useLiveClassifier(
   videoRef: React.RefObject<HTMLVideoElement | null>,
@@ -43,6 +53,7 @@ export function useLiveClassifier(
   const lastTrustedAtRef = useRef(0)
   const lastFrameAtRef = useRef(0)
   const distanceSinceRef = useRef<number | null>(null)
+  const emaRef = useRef<Partial<Record<FeatureKey, number>>>({})
   const profileRef = useRef(profile)
   profileRef.current = profile
   const sensitivityRef = useRef(sensitivity)
@@ -54,6 +65,8 @@ export function useLiveClassifier(
     enabled,
     onFrame: (frame: PoseFrame) => {
       const now = performance.now()
+      // 프레임이 오래 끊겼다 돌아오면 이전 자세와 섞이지 않게 EMA 를 리셋합니다.
+      if (now - lastFrameAtRef.current > EMA_RESET_GAP_MS) emaRef.current = {}
       lastFrameAtRef.current = now
       const store = usePostureStore.getState()
       const debug = usePostureDebugStore.getState()
@@ -131,7 +144,7 @@ export function useLiveClassifier(
             shoulderWidth: analysis.shoulderWidth,
             baselineShoulderWidth: baseSW,
             quality: 'limited',
-            qualityReason: '카메라 거리가 기준과 20% 이상 다름',
+            qualityReason: '카메라 거리가 기준과 35% 이상 다름',
             details: [],
             excluded: analysis.excluded,
             voters: [],
@@ -151,12 +164,27 @@ export function useLiveClassifier(
         if (store.notice === 'camera-distance') store.setNotice(null)
       }
 
-      // ---- 품질: 선택 랜드마크(귀·엉덩이)까지 다 보이면 good, 일부 없으면 limited
+      // ---- 품질: 선택 랜드마크(귀·엉덩이)까지 다 보이고 고개 돌림이 없으면 good.
+      //      일부 가려짐·고개 돌림은 limited — 판정은 계속하되 단독 강신호
+      //      bad 경로만 잠급니다.
       const quality: DetectionQuality =
-        analysis.earsOk && analysis.hipsOk ? 'good' : 'limited'
+        analysis.earsOk && analysis.hipsOk && !analysis.moderateRotation
+          ? 'good'
+          : 'limited'
+
+      // ---- EMA 스무딩 — 이번 프레임에 없는 특징은 남기지 않습니다.
+      const smoothed: Partial<Record<FeatureKey, number>> = {}
+      for (const [key, value] of Object.entries(analysis.features) as Array<
+        [FeatureKey, number]
+      >) {
+        const prev = emaRef.current[key]
+        smoothed[key] =
+          prev === undefined ? value : prev + EMA_ALPHA * (value - prev)
+      }
+      emaRef.current = smoothed
 
       const votes = computeVotes(
-        analysis.features,
+        smoothed,
         prof,
         sensitivityRef.current,
         quality === 'good',
@@ -182,6 +210,7 @@ export function useLiveClassifier(
             ? [
                 !analysis.earsOk ? '귀 일부 미감지(보조)' : null,
                 !analysis.hipsOk ? '엉덩이 화면 밖(보조)' : null,
+                analysis.moderateRotation ? '고개 돌림(측정 제한)' : null,
               ]
                 .filter(Boolean)
                 .join(' · ')
@@ -228,6 +257,7 @@ export function useLiveClassifier(
       lastTrustedAtRef.current = 0
       lastFrameAtRef.current = 0
       distanceSinceRef.current = null
+      emaRef.current = {}
       usePostureDebugStore.getState().reset()
       usePostureStore.getState().setNotice(null)
     }

@@ -14,7 +14,7 @@ const RUNNING = (plannedMs: number) => ({
 })
 
 describe('세션 기본값', () => {
-  it('기본 세션은 25분 집중 + 2분 리셋이다', () => {
+  it('기본 세션은 25분 집중 + 2분 회복 휴식이다', () => {
     const option = getSessionLength(DEFAULT_SESSION_LENGTH_ID)
     expect(option.focusSec).toBe(1500)
     expect(option.restSec).toBe(120)

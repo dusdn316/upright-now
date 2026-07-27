@@ -23,7 +23,7 @@ export default defineConfig({
   reporter: [['list']],
   outputDir: './test-results',
   use: {
-    baseURL: 'http://localhost:5273',
+    baseURL: 'http://localhost:5283',
     viewport: { width: 1440, height: 1000 },
     trace: 'on-first-retry',
   },
@@ -32,16 +32,44 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        launchOptions: {
+          args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+        },
         viewport: { width: 1440, height: 1000 },
       },
     },
   ],
-  webServer: {
-    command: 'npm run dev -- --port 5273 --strictPort',
-    url: 'http://localhost:5273',
-    reuseExistingServer: false,
-    timeout: 120_000,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  },
+  /**
+   * 서버 2대를 띄웁니다.
+   * - 5283: 기본 빌드 (캠퍼스 플래그 OFF) → 기존 화면 회귀 + OFF 회귀 검사
+   * - 5284: 캠퍼스 플래그 ON → 캠퍼스 테마·영토전 검사 (mock 저장소)
+   *
+   * Vite 는 VITE_ 로 시작하는 process.env 를 그대로 노출하므로,
+   * .env 파일을 건드리지 않고 서버별 플래그를 다르게 줄 수 있습니다.
+   */
+  webServer: [
+    {
+      command: 'npm run dev -- --port 5283 --strictPort',
+      url: 'http://localhost:5283',
+      reuseExistingServer: false,
+      timeout: 120_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+    {
+      command: 'npm run dev -- --port 5284 --strictPort',
+      url: 'http://localhost:5284',
+      reuseExistingServer: false,
+      timeout: 120_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      env: {
+        VITE_ENABLE_CAMPUS_THEME: 'true',
+        VITE_ENABLE_CAMPUS_TERRITORY: 'true',
+        // Supabase 저장소는 켜지 않습니다. Preview·E2E 는 mock 으로 확인합니다.
+        VITE_ENABLE_CAMPUS_SUPABASE: 'false',
+        VITE_ENABLE_QA_LAB: 'true',
+      },
+    },
+  ],
 })

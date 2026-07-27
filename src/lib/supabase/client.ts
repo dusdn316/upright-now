@@ -16,6 +16,28 @@ export function isRoomConfigured(): boolean {
   )
 }
 
+/**
+ * Supabase 내부 서비스 간 시계 오차로, 익명 가입 직후 ~1초 동안
+ * "JWT issued at future"(PGRST303, 401) 가 간헐적으로 발생합니다.
+ * 요청은 실행되지 않은 채 거부된 것이므로 짧게 기다렸다 1회 재시도합니다.
+ * (신규 사용자의 첫 방 만들기/학교 선택이 이 창에 정확히 걸립니다)
+ */
+export async function fetchRetryingClockSkew(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const res = await fetch(input, init)
+  if (res.status !== 401) return res
+  try {
+    const body = (await res.clone().json()) as { code?: string } | null
+    if (body?.code !== 'PGRST303') return res
+  } catch {
+    return res
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1200))
+  return fetch(input, init)
+}
+
 export async function getSupabase(): Promise<SupabaseClient | null> {
   if (cached) return cached
   if (attempted) return cached
@@ -28,7 +50,10 @@ export async function getSupabase(): Promise<SupabaseClient | null> {
     import.meta.env.VITE_SUPABASE_URL!,
     (import.meta.env.VITE_SUPABASE_ANON_KEY ??
       import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY)!,
-    { auth: { persistSession: true } },
+    {
+      auth: { persistSession: true },
+      global: { fetch: fetchRetryingClockSkew },
+    },
   )
   return cached
 }

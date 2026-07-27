@@ -26,6 +26,14 @@ export const STORAGE_KEYS = {
   progression: 'progression',
   calibration: 'calibration',
   sessions: 'sessions',
+  /** 캠퍼스 테마 선택 (학교·직접 고른 색·변경 이력) */
+  campus: 'campus',
+  /** 캠퍼스 기여도 로컬 원장 — 중복·상한 판정용 */
+  campusLedger: 'campus-ledger',
+  /** 캠퍼스 영토전 mock 저장소 (Supabase 대체) */
+  campusMock: 'campus-mock',
+  /** 캠퍼스 기여 유실 방지 outbox (미전송 이벤트 큐) */
+  campusOutbox: 'campus-outbox',
 } as const
 
 /* ------------------------------ 마이그레이션 ------------------------------ */

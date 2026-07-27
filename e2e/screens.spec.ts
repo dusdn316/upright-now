@@ -68,7 +68,7 @@ test.describe('1440x1000', () => {
   test('03~06 세션 상태와 결과', async ({ page }) => {
     await startSession(page)
 
-    const boss = page.getByRole('progressbar', { name: /마감괴수/ })
+    const boss = page.getByRole('progressbar', { name: /북몽이/ })
 
     // 03 good
     await dev(page, 'setPosture', 'good')
@@ -87,7 +87,7 @@ test.describe('1440x1000', () => {
       page.getByText('처음 등록한 기준으로 가볍게 돌아와 볼까요?'),
     ).toBeVisible()
     await expect(
-      page.locator('main figure[data-asset-state="slouch"]'),
+      page.locator('main figure[data-visual-state="slouch"]'),
     ).toBeVisible()
     await settle(page)
     await page.screenshot({ path: `${DIR}/04-session-bad-1440.png`, fullPage: true })

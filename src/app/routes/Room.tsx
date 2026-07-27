@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell, PageHeader } from '@/components/layout/AppShell'
 import { Badge, Button, Card, CardTitle, Progress } from '@/components/ui'
@@ -11,13 +11,19 @@ import { useRoomStore } from '@/features/rooms/roomStore'
 import {
   joinRoom,
   leaveRoom,
+  rejoinFromStorage,
   sendReaction,
   setMyState,
   startRoomSession,
 } from '@/features/rooms/roomService'
+import { useUserStore } from '@/features/onboarding/userStore'
+import { useCalibrationStore, hasValidActiveProfile } from '@/features/calibration/calibrationStore'
+import { DetectionPreflight } from '@/components/room/DetectionPreflight'
+import { TextField } from '@/components/ui'
 import { REACTION_LABEL } from '@/features/rooms/roomEvents'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useToast } from '@/app/providers/ToastProvider'
+import { CampusRoomBanner } from '@/components/campus/CampusBits'
 import { Placeholder } from './Placeholder'
 import { FRIEND_ROOM } from '@/constants/copy'
 import type { CharacterStage } from '@/types'
@@ -29,15 +35,26 @@ export function Room() {
   const { push } = useToast()
   const room = useRoomStore()
   const configureSession = useSessionStore((s) => s.configure)
+  const hasOnboarded = useUserStore((s) => s.hasOnboarded)
+  const setNickname = useUserStore((s) => s.setNickname)
+  const myProfiles = useCalibrationStore((s) => s.profiles)
+  const validActiveProfile = useCalibrationStore((s) => hasValidActiveProfile(s))
+  const [preflightOpen, setPreflightOpen] = useState(false)
+  const [nicknameDraft, setNicknameDraft] = useState('')
+  const needNickname = !hasOnboarded && room.phase === 'idle'
   const startSession = useSessionStore((s) => s.start)
 
-  // 링크로 직접 들어온 경우 자동 입장 시도
+  // 링크 진입: 닉네임 확인 → 기존 참가자 재접속 우선 → 신규 입장.
+  // running 방의 신규 입장은 서버가 거부하고, 재접속만 통과합니다.
   useEffect(() => {
-    if (!featureFlags.friendRoom) return
+    if (!featureFlags.friendRoom || needNickname) return
     if (room.phase === 'idle' && roomCode.length === 6) {
-      void joinRoom(roomCode)
+      void (async () => {
+        const rejoined = await rejoinFromStorage(roomCode)
+        if (!rejoined) void joinRoom(roomCode)
+      })()
     }
-  }, [room.phase, roomCode])
+  }, [room.phase, roomCode, needNickname])
 
   // 세션이 시작되면 개인 세션 화면으로 이동 (각자 기기에서 독립 분석)
   useEffect(() => {
@@ -47,7 +64,15 @@ export function Room() {
       goal: room.goal,
       mode: 'room',
       lengthId:
-        room.durationSec === 900 ? '15' : room.durationSec === 3000 ? '50' : '25',
+        room.durationSec === 900
+          ? '15'
+          : room.durationSec === 3000
+            ? '50'
+            : room.durationSec === 1500
+              ? '25'
+              : 'custom',
+      customFocusMin: Math.round(room.durationSec / 60),
+      customRestMin: room.durationSec >= 3000 ? 5 : room.durationSec >= 1500 ? 2 : 1,
     })
     startSession(`room-${room.code}`)
     void setMyState('focusing')
@@ -65,8 +90,12 @@ export function Room() {
   }
 
   const me = room.members.find((m) => m.participantId === room.myId)
-  const bothReady =
-    room.members.length === 2 && room.members.every((m) => m.state === 'ready')
+  const fullyReady = (m: (typeof room.members)[number]) =>
+    m.cameraReady && m.calibrationReady && m.modelReady && m.userReady
+  const bothReady = room.members.length === 2 && room.members.every(fullyReady)
+  const myPrereqOk = featureFlags.camera
+    ? room.myCameraReady && room.myModelReady && validActiveProfile
+    : true
 
   const copyInvite = async () => {
     const url = `${window.location.origin}/room/${room.code}`
@@ -83,6 +112,11 @@ export function Room() {
       <PageHeader
         title={room.roomName || '친구 방'}
         description={ROOM_PRIVACY}
+        back={() => {
+          // 뒤로가기도 "나가기"와 같은 정리 경로를 타야 presence 가 남지 않습니다.
+          void leaveRoom()
+          navigate(ROUTES.roomNew)
+        }}
         action={
           room.connection !== 'connected' ? (
             <Badge tone="coral">
@@ -91,6 +125,33 @@ export function Room() {
           ) : undefined
         }
       />
+
+      {needNickname && (
+        <Card>
+          <CardTitle>어떻게 불러드릴까요?</CardTitle>
+          <p className="mt-1 text-xs text-ink-soft">
+            친구 방에서 사용할 별명이에요. 입장 전에 정해 주세요.
+          </p>
+          <div className="mt-3 flex items-end gap-2">
+            <div className="flex-1">
+              <TextField
+                label="닉네임"
+                id="room-nickname"
+                maxLength={12}
+                value={nicknameDraft}
+                onChange={(e) => setNicknameDraft(e.target.value)}
+              />
+            </div>
+            <Button onClick={() => setNickname(nicknameDraft)}>입장 계속</Button>
+          </div>
+        </Card>
+      )}
+
+      {/*
+        캠퍼스 테마 배너 — 표시 전용입니다.
+        친구 방 연결·Presence·Broadcast·보스 HP 로직은 건드리지 않습니다.
+      */}
+      <CampusRoomBanner />
 
       {room.phase === 'connecting' && (
         <Card>
@@ -155,27 +216,87 @@ export function Room() {
                       {member.nickname}
                       {member.isHost && <Badge tone="yellow">방장</Badge>}
                     </p>
-                    <Badge tone={member.state === 'ready' ? 'green' : 'muted'}>
-                      {member.state === 'ready'
+                    <Badge tone={fullyReady(member) ? 'green' : 'muted'}>
+                      {fullyReady(member)
                         ? '준비 완료'
                         : member.state === 'focusing'
                           ? '집중 중'
                           : '준비 중'}
                     </Badge>
+                    <div className="mt-1 flex flex-wrap justify-center gap-1 text-[10px]">
+                      {[
+                        ['카메라', member.cameraReady],
+                        ['자세 기준', member.calibrationReady],
+                        ['모델', member.modelReady],
+                        ['준비', member.userReady],
+                      ].map(([label, ok]) => (
+                        <span
+                          key={String(label)}
+                          className={
+                            'rounded-full px-1.5 py-0.5 font-semibold ' +
+                            (ok ? 'bg-green-soft text-green' : 'bg-canvas text-muted')
+                          }
+                        >
+                          {ok ? '✓ ' : '· '}
+                          {label}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )
               })}
             </div>
 
+            {featureFlags.camera && !myPrereqOk && (
+              <div className="mt-4 rounded-2xl bg-surface/80 p-3 text-sm">
+                <p className="font-bold text-ink">시작 전에 준비가 필요해요</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {!(room.myCameraReady && room.myModelReady) && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setPreflightOpen(true)}
+                      disabled={preflightOpen}
+                    >
+                      카메라·감지 확인
+                    </Button>
+                  )}
+                  {preflightOpen && (
+                    <DetectionPreflight
+                      onDone={(ok, message) => {
+                        setPreflightOpen(false)
+                        if (ok) {
+                          void setMyState(me?.state === 'ready' ? 'ready' : 'joining')
+                          push({ title: '카메라와 자세 감지가 준비됐어요.', tone: 'success' })
+                        } else if (message) {
+                          push({ title: message, tone: 'warning' })
+                        }
+                      }}
+                    />
+                  )}
+                  {myProfiles.length === 0 && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => navigate(`/calibration?return=/room/${room.code}`)}
+                    >
+                      자세 기준 등록
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
                 size="sm"
                 variant={me?.state === 'ready' ? 'secondary' : 'primary'}
+                disabled={!myPrereqOk}
                 onClick={() =>
                   void setMyState(me?.state === 'ready' ? 'joining' : 'ready')
                 }
               >
-                {me?.state === 'ready' ? '준비 해제' : '준비 완료'}
+                {me?.state === 'ready' ? '준비 해제' : myPrereqOk ? '준비 완료' : '준비 전 단계 필요'}
               </Button>
               {room.isHost && (
                 <Button
@@ -213,12 +334,12 @@ export function Room() {
             </Card>
 
             <Card>
-              <CardTitle>공동 마감괴수</CardTitle>
+              <CardTitle>공동 팀플 괴물 꼬몽이</CardTitle>
               <div className="mt-3">
                 <Progress
                   value={room.bossHp / room.bossMaxHp}
                   tone="pink"
-                  label="공동 보스 체력"
+                  label="팀플 괴물 꼬몽이 체력"
                   thick
                 />
                 <p className="mt-1 tabular text-xs text-ink-soft">

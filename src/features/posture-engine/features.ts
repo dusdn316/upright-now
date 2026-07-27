@@ -69,6 +69,8 @@ export interface LandmarkAnalysis {
   /** 코가 눈 중앙에서 얼마나 벗어났는지 (0=정면, 1≈눈 위치) */
   yawRatio: number
   severeRotation: boolean
+  /** 중간 정도 고개 돌림 — 코 기반 특징(좌우·z)을 측정 제한으로 제외 */
+  moderateRotation: boolean
   inFrame: boolean
   /** 계산 가능한 특징만 담김 */
   features: Partial<Record<FeatureKey, number>>
@@ -79,7 +81,14 @@ export interface LandmarkAnalysis {
 
 const PRESENCE_MIN = 0.5
 export const MIN_SHOULDER_WIDTH = 0.09
-const YAW_SEVERE = 0.7
+/**
+ * 고개 돌림 게이트 — 실카메라에서 두 번째 모니터를 보는 정도(~20°)의 곁눈질이
+ * severe 로 잡혀 unstable 로 튀던 문제(합성 데이터 기준 0.7)를 완화합니다.
+ * moderate(0.5~0.9): 코 기반 특징만 제외하고 판정은 계속합니다.
+ * severe(>0.9): 측정 제한(unstable) — 자세 이탈(bad)로 판정하지 않습니다.
+ */
+const YAW_SEVERE = 0.9
+const YAW_MODERATE = 0.5
 const FRAME_MARGIN = 0.06
 
 function toPoint(lm: Landmark | undefined): PointInfo {
@@ -144,6 +153,7 @@ export function analyzeLandmarks(
       ? Math.abs(nose.x - eyeMidX) / (eyeDist / 2)
       : 0
   const severeRotation = yawRatio > YAW_SEVERE
+  const moderateRotation = !severeRotation && yawRatio > YAW_MODERATE
 
   const corePoints = [leftShoulder, rightShoulder, ...(eyesOk ? [leftEyeOuter, rightEyeOuter] : [nose])]
   const frameOk = corePoints.every(inFrame)
@@ -163,9 +173,14 @@ export function analyzeLandmarks(
     excluded.headHeightRatio = eyesOk ? '어깨 미감지' : '눈 미감지'
   }
 
-  if (nose.present && bothShouldersOk) {
+  if (nose.present && bothShouldersOk && !moderateRotation) {
     features.lateralOffsetRatio = Math.abs(nose.x - shoulderMidX) / sw
     features.forwardDepthRatio = shoulderMidZ - nose.z
+  } else if (moderateRotation) {
+    // 고개를 돌리면 코가 어깨 중앙에서 벗어나는 것이 자연스럽습니다.
+    // 자세 이탈로 과금하지 않고 측정 제한으로 제외합니다.
+    excluded.lateralOffsetRatio = '고개 돌림(측정 제한)'
+    excluded.forwardDepthRatio = '고개 돌림(측정 제한)'
   } else {
     excluded.lateralOffsetRatio = nose.present ? '어깨 미감지' : '코 미감지'
     excluded.forwardDepthRatio = nose.present ? '어깨 미감지' : '코 미감지'
@@ -193,6 +208,7 @@ export function analyzeLandmarks(
     hipsOk,
     yawRatio,
     severeRotation,
+    moderateRotation,
     inFrame: frameOk,
     features,
     excluded,

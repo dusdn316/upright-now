@@ -18,6 +18,13 @@ export type RoomConnection = 'connected' | 'reconnecting' | 'offline'
 export type MemberState = 'joining' | 'ready' | 'focusing' | 'resting' | 'away' | 'completed'
 
 export interface RoomMember {
+  /** 장착 아이템 (성공 이벤트와 함께 공유 허용 항목) */
+  jacketId?: string
+  backpackId?: string
+  cameraReady: boolean
+  calibrationReady: boolean
+  modelReady: boolean
+  userReady: boolean
   participantId: string
   nickname: string
   stage: number
@@ -27,8 +34,11 @@ export interface RoomMember {
 
 export interface ReactionFeedItem {
   id: string
+  participantId: string
   nickname: string
   reaction: ReactionKind
+  /** 커스텀 응원 문구 (있으면 기본 라벨 대신 표시) */
+  reactionText?: string
   at: number
 }
 
@@ -49,6 +59,12 @@ interface RoomStoreState {
   bossHp: number
   bossMaxHp: number
   shield: number
+  /** 친구 회복 공격 연출 트리거 (수신 시 +1) */
+  friendAttackTick: number
+  /** 내 카메라 권한 확인 여부 (presence 로만 공유) */
+  myCameraReady: boolean
+  /** 감지 사전 점검(모델 로드+1.5초 유효 랜드마크) 통과 */
+  myModelReady: boolean
   /** 기린 싱크 연출 트리거 */
   syncFlashAt: number | null
   reactions: ReactionFeedItem[]
@@ -78,6 +94,9 @@ const initialState = {
   bossMaxHp: ROOM_BOSS_MAX_HP,
   shield: 0,
   syncFlashAt: null,
+  friendAttackTick: 0,
+  myCameraReady: false,
+  myModelReady: false,
   reactions: [] as ReactionFeedItem[],
   lastFriendEvent: null,
 }
@@ -89,3 +108,20 @@ export const useRoomStore = create<RoomStoreState>((set) => ({
     set((s) => ({ reactions: [item, ...s.reactions].slice(0, 4) })),
   reset: () => set({ ...initialState }),
 }))
+
+import { useSessionStore } from '@/features/sessions/sessionStore'
+
+/**
+ * "지금 친구 방 세션 중"의 단일 판정 — 네 조건을 모두 요구합니다.
+ * 어느 하나라도 어긋나면(오래된 phase, sticky mode 등) 개인 세션으로 봅니다.
+ */
+export function isRoomSessionActive(): boolean {
+  const room = useRoomStore.getState()
+  const session = useSessionStore.getState()
+  return (
+    session.mode === 'room' &&
+    room.phase === 'running' &&
+    room.roomId !== null &&
+    session.sessionId === `room-${room.code ?? ''}`
+  )
+}

@@ -21,16 +21,42 @@ export const DAMAGE = {
   giraffeSync: 60,
   bothCompleted: 150,
   goalCompleted: 30,
+  /** 유효 감지 집중 5분마다 — 자세를 무너뜨리지 않아도 괴물을 공격 */
+  focus: 20,
 } as const
 
+/** 유효 집중 공격 주기 (감지 가능 시간 기준) */
+export const FOCUS_ATTACK_INTERVAL_MS = 5 * 60 * 1000
+
 /** 경험치와 잎사귀 포인트 */
+/**
+ * 경제 v2 — 기존 획득분은 차감하지 않고 "새 이벤트"부터 이 표를 적용합니다.
+ * 세션 완주는 길이별(sessionCompletionReward), 아래는 행동 보상 기본값.
+ */
 export const REWARD = {
-  sessionCompleted: { xp: 100, points: 100 },
-  recovery: { xp: 30, points: 10 },
-  stretch: { xp: 20, points: 20 },
-  roomCompleted: { xp: 30, points: 30 },
-  goalCompleted: { xp: 20, points: 20 },
+  /** 15~29분 구간 기본값 — 실제 지급은 sessionCompletionReward 사용 */
+  sessionCompleted: { xp: 60, points: 30 },
+  recovery: { xp: 25, points: 5 },
+  stretch: { xp: 10, points: 10 },
+  /** 친구 공동 완주 추가 보너스 */
+  roomCompleted: { xp: 20, points: 10 },
+  goalCompleted: { xp: 15, points: 10 },
 } as const
+
+/** 세션 완주 보상 — 계획 길이(분) 기준 */
+export function sessionCompletionReward(plannedMin: number): {
+  xp: number
+  points: number
+} {
+  if (plannedMin < 5) return { xp: 0, points: 0 } // 1분 점검 등 — 보상 없음
+  if (plannedMin < 15) return { xp: 20, points: 10 }
+  if (plannedMin < 30) return { xp: 60, points: 30 }
+  if (plannedMin < 50) return { xp: 80, points: 40 }
+  return { xp: 120, points: 60 }
+}
+
+/** 개인 괴물 장기 진행도 — 4단계 체력 */
+export const MONSTER_PHASE_HP = [600, 900, 1300, 1800] as const
 
 /**
  * 마감괴수 D-DAY 기본 체력.

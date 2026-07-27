@@ -7,13 +7,17 @@ import { resetRewardsForTest } from '@/features/game/rewards'
 import { useProgressionStore } from '@/features/progression/progressionStore'
 import { useDemoStore } from '@/features/demo/demoMode'
 
-function seedSession(elapsedMs: number, plannedMs = 1_500_000) {
+function seedSession(
+  elapsedMs: number,
+  plannedMs = 1_500_000,
+  detectableMs = elapsedMs,
+) {
   useSessionStore.setState({
     sessionId: 's-test',
     status: 'running',
     plannedMs,
     elapsedMs,
-    detectableMs: elapsedMs,
+    detectableMs,
     awayMs: 0,
     unstableMs: 0,
     subject: '테스트',
@@ -42,8 +46,8 @@ describe('finalizeSession — atomic 세션 종료 (긴급 안정화 F)', () => 
 
     expect(result.completed).toBe(true)
     const prog = useProgressionStore.getState()
-    expect(prog.xp).toBe(100)
-    expect(prog.points).toBe(100)
+    expect(prog.xp).toBe(60)
+    expect(prog.points).toBe(30)
     expect(prog.completedSessions).toBe(1)
     expect(prog.attendance).toHaveLength(1)
     expect(useSessionHistoryStore.getState().summaries).toHaveLength(1)
@@ -79,20 +83,37 @@ describe('finalizeSession — atomic 세션 종료 (긴급 안정화 F)', () => 
     const second = finalizeSession('manual')
 
     expect(second.alreadyFinalized).toBe(true)
-    expect(useProgressionStore.getState().xp).toBe(100)
+    expect(useProgressionStore.getState().xp).toBe(60)
     expect(useProgressionStore.getState().completedSessions).toBe(1)
     expect(useSessionHistoryStore.getState().summaries).toHaveLength(1)
   })
 
-  it('세션을 다시 시작하면 종료 잠금이 풀린다', () => {
+  it('세션을 다시 시작하면 종료 잠금과 보상 잠금이 함께 풀린다', () => {
     seedSession(1_500_000)
     finalizeSession('timer')
+    const afterFirst = useProgressionStore.getState().xp
+    const afterFirstPoints = useProgressionStore.getState().points
 
     useSessionStore.getState().start('s-test')
     seedSession(1_500_000)
     finalizeSession('timer')
 
     expect(useProgressionStore.getState().completedSessions).toBe(2)
+    // 완주 XP·포인트도 2회분 — appliedIds 잔여로 두 번째 보상이
+    // 사라지지 않아야 합니다.
+    expect(useProgressionStore.getState().xp).toBe(afterFirst * 2)
+    expect(useProgressionStore.getState().points).toBe(afterFirstPoints * 2)
+  })
+
+  it('비데모 세션에서 감지 시간이 0이면 완주 보상·출석이 없다 (기록은 중단으로)', () => {
+    seedSession(1_500_000, 1_500_000, 0)
+    finalizeSession('timer')
+
+    expect(useProgressionStore.getState().completedSessions).toBe(0)
+    expect(useProgressionStore.getState().xp).toBe(0)
+    expect(useProgressionStore.getState().points).toBe(0)
+    const [summary] = useSessionHistoryStore.getState().summaries
+    expect(summary.status).toBe('aborted')
   })
 
   it('데모 모드에서는 출석·완료 수·기록을 남기지 않는다', () => {

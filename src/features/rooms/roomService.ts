@@ -2,6 +2,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { ensureAnonymousUser, getSupabase } from '@/lib/supabase/client'
 import {
   generateRoomCode,
+  sanitizeReactionText,
   sanitizeRoomEvent,
   ROOM_DAMAGE,
   ROOM_SHIELD_PER_STRETCH,
@@ -13,6 +14,8 @@ import { useRoomStore, type MemberState } from './roomStore'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { xpToStage } from '@/features/progression/growth'
 import { useProgressionStore } from '@/features/progression/progressionStore'
+import { useCalibrationStore, hasValidActiveProfile } from '@/features/calibration/calibrationStore'
+import { featureFlags } from '@/lib/feature-flags/flags'
 
 /**
  * 친구 방 서비스 — Supabase 익명 인증 · RPC · Presence · Broadcast.
@@ -25,17 +28,31 @@ let channel: RealtimeChannel | null = null
 let giraffe = createGiraffeSync()
 let reconnectTimer: number | null = null
 let pollTimer: number | null = null
+let heartbeatTimer: number | null = null
 let reconnectDeadline = 0
 
 const store = () => useRoomStore.getState()
 
 function myPresence(state: MemberState) {
+  const prog = useProgressionStore.getState()
+  const user = useUserStore.getState()
+  const cal = useCalibrationStore.getState()
+  const cameraOn = featureFlags.camera
   return {
     participantId: store().myId ?? '',
-    nickname: useUserStore.getState().nickname,
-    stage: xpToStage(useProgressionStore.getState().xp),
+    nickname: user.nickname,
+    stage: xpToStage(prog.xp),
     state,
     isHost: store().isHost,
+    jacketId: prog.equipped.jacketId,
+    backpackId: prog.equipped.backpackId,
+    // 준비 상태 — 자세 상태(good/bad 등)는 절대 넣지 않습니다.
+    cameraReady: !cameraOn || store().myCameraReady,
+    // 프로필 개수가 아니라 "유효한 활성 기준"을 요구합니다.
+    calibrationReady: !cameraOn || hasValidActiveProfile(cal),
+    // 감지 사전 점검(모델 로드 + 1.5초 유효 랜드마크) 통과 여부
+    modelReady: !cameraOn || store().myModelReady,
+    userReady: state === 'ready',
   }
 }
 
@@ -68,8 +85,10 @@ function handleEvent(event: RoomEvent): void {
   if (event.type === 'reaction_sent' && event.reaction) {
     s.addReaction({
       id: event.id,
+      participantId: event.participantId,
       nickname: event.nickname,
       reaction: event.reaction,
+      reactionText: event.reactionText,
       at: Date.now(),
     })
     return
@@ -85,7 +104,10 @@ function handleEvent(event: RoomEvent): void {
 
   if (event.type === 'recovery_earned') {
     if (!isMine) {
-      s.patch({ lastFriendEvent: `${event.nickname}님이 회복 에너지를 보냈어요.` })
+      s.patch({
+        lastFriendEvent: `${event.nickname}님이 회복 에너지를 보냈어요.`,
+        friendAttackTick: s.friendAttackTick + 1,
+      })
     }
     const result = registerRecovery(giraffe, {
       eventId: event.id,
@@ -143,8 +165,27 @@ function startPolling(roomId: string): void {
   }, 3000)
 }
 
+function startHeartbeat(roomId: string): void {
+  if (heartbeatTimer) window.clearInterval(heartbeatTimer)
+  heartbeatTimer = window.setInterval(() => {
+    const phase = store().phase
+    if (phase !== 'waiting' && phase !== 'running') return
+    void (async () => {
+      const supabase = await getSupabase()
+      if (!supabase) return
+      try {
+        await supabase.rpc('heartbeat_room_member', { p_room_id: roomId })
+        await supabase.rpc('cleanup_stale_members', { p_room_id: roomId })
+      } catch {
+        /* 마이그레이션 전 — 무시 */
+      }
+    })()
+  }, 15_000)
+}
+
 function subscribeChannel(roomId: string, code: string): void {
   startPolling(roomId)
+  startHeartbeat(roomId)
   void (async () => {
     const supabase = await getSupabase()
     if (!supabase) return
@@ -171,6 +212,12 @@ function subscribeChannel(roomId: string, code: string): void {
           stage: m.stage,
           state: m.state,
           isHost: m.isHost,
+          jacketId: m.jacketId,
+          backpackId: m.backpackId,
+          cameraReady: Boolean(m.cameraReady),
+          calibrationReady: Boolean(m.calibrationReady),
+          modelReady: Boolean(m.modelReady),
+          userReady: Boolean(m.userReady),
         }))
         store().patch({ members })
       })
@@ -215,7 +262,48 @@ function scheduleReconnect(roomId: string, code: string): void {
   }, 3000)
 }
 
+const REJOIN_KEY = 'upright-room-rejoin'
+
+function saveRejoin(): void {
+  const s = store()
+  try {
+    sessionStorage.setItem(
+      REJOIN_KEY,
+      JSON.stringify({ roomId: s.roomId, code: s.code, myId: s.myId, isHost: s.isHost }),
+    )
+  } catch { /* 저장 실패 무시 */ }
+}
+
+/** 새로고침 뒤 기존 참가자의 재접속 — join_room RPC 를 다시 부르지 않습니다. */
+export async function rejoinFromStorage(code: string): Promise<boolean> {
+  try {
+    const raw = sessionStorage.getItem(REJOIN_KEY)
+    if (!raw) return false
+    const saved = JSON.parse(raw) as { roomId: string; code: string; myId: string; isHost: boolean }
+    if (saved.code !== code.toUpperCase() || !saved.roomId) return false
+    const userId = await ensureAnonymousUser()
+    // 모두 떠난 버려진 방을 이 시점에 제한적으로 정리합니다.
+    void sweepAbandonedRooms()
+    if (!userId || userId !== saved.myId) return false
+    giraffe = createGiraffeSync()
+    store().patch({ phase: 'connecting', roomId: saved.roomId, code: saved.code, myId: userId, isHost: saved.isHost })
+    subscribeChannel(saved.roomId, saved.code)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /* -------------------------------- 공개 API ------------------------------- */
+
+async function sweepAbandonedRooms(): Promise<void> {
+  try {
+    const supabase = await getSupabase()
+    if (supabase) await supabase.rpc('cleanup_abandoned_rooms')
+  } catch {
+    /* 마이그레이션 전 — 무시 */
+  }
+}
 
 export async function createRoom(input: {
   roomName: string
@@ -227,6 +315,8 @@ export async function createRoom(input: {
   s.patch({ phase: 'connecting', errorMessage: null })
 
   const userId = await ensureAnonymousUser()
+  // 모두 떠난 버려진 방을 이 시점에 제한적으로 정리합니다.
+  void sweepAbandonedRooms()
   const supabase = await getSupabase()
   if (!userId || !supabase) {
     s.patch({ phase: 'error', errorMessage: '연결을 준비하지 못했어요. 잠시 후 다시 시도해 주세요.' })
@@ -260,6 +350,7 @@ export async function createRoom(input: {
     isHost: true,
   })
   subscribeChannel(data as string, code)
+  saveRejoin()
   return { ok: true, code }
 }
 
@@ -270,6 +361,8 @@ export async function joinRoom(
   s.patch({ phase: 'connecting', errorMessage: null })
 
   const userId = await ensureAnonymousUser()
+  // 모두 떠난 버려진 방을 이 시점에 제한적으로 정리합니다.
+  void sweepAbandonedRooms()
   const supabase = await getSupabase()
   if (!userId || !supabase) {
     s.patch({ phase: 'error', errorMessage: '연결을 준비하지 못했어요. 잠시 후 다시 시도해 주세요.' })
@@ -303,24 +396,46 @@ export async function joinRoom(
     isHost: false,
   })
   subscribeChannel(data as string, code.toUpperCase())
+  saveRejoin()
   return { ok: true }
 }
 
 export async function setMyState(state: MemberState): Promise<void> {
   await channel?.track(myPresence(state))
+  // 서버 검증(start_room_session)이 준비 상태를 읽을 수 있도록
+  // 내 room_members.state 도 함께 기록합니다. (RLS: 내 행만 수정 가능)
+  const s = store()
+  const supabase = await getSupabase()
+  if (!supabase || !s.roomId || !s.myId) return
+  await supabase
+    .from('room_members')
+    .update({ state })
+    .eq('room_id', s.roomId)
+    .eq('user_id', s.myId)
 }
 
-/** 방장만 시작 — 두 명 모두 ready 인지 확인은 UI 가 담당합니다. */
+/**
+ * 방장만 시작 — 서버(start_room_session RPC)가 방장·waiting·2명·
+ * 두 명 모두 ready 를 검증합니다. UI disabled 는 보조 수단일 뿐입니다.
+ * 라이브 DB 에 마이그레이션이 아직 없으면(RPC 미존재) 기존 경로로 폴백합니다.
+ */
 export async function startRoomSession(): Promise<boolean> {
   const s = store()
   const supabase = await getSupabase()
   if (!supabase || !s.roomId || !s.isHost) return false
 
-  const { error } = await supabase
-    .from('rooms')
-    .update({ status: 'running', started_at: new Date().toISOString() })
-    .eq('id', s.roomId)
-  if (error) return false
+  const { error } = await supabase.rpc('start_room_session', {
+    p_room_id: s.roomId,
+  })
+  if (error) {
+    // PGRST202 = 함수 없음 (마이그레이션 전) → 레거시 직접 UPDATE 폴백
+    if (error.code !== 'PGRST202') return false
+    const { error: legacyError } = await supabase
+      .from('rooms')
+      .update({ status: 'running', started_at: new Date().toISOString() })
+      .eq('id', s.roomId)
+    if (legacyError) return false
+  }
   await setMyState('focusing')
   return true
 }
@@ -362,6 +477,15 @@ export async function reportStretchComplete(): Promise<void> {
   if (typeof data === 'number') s.patch({ shield: data })
 }
 
+async function completeRoomIfDone(roomId: string): Promise<void> {
+  try {
+    const supabase = await getSupabase()
+    if (supabase) await supabase.rpc('complete_room_if_done', { p_room_id: roomId })
+  } catch {
+    /* 마이그레이션 전 — 무시 */
+  }
+}
+
 export async function reportSessionComplete(): Promise<void> {
   const s = store()
   if (!s.roomId || !s.myId) return
@@ -375,17 +499,29 @@ export async function reportSessionComplete(): Promise<void> {
   })
   await setMyState('completed')
   await applyDamageRpc(s.roomId, eventId, 'session_completed', ROOM_DAMAGE.sessionCompleted)
+  // 두 참가자 모두 completed 면 서버가 방을 completed + ended_at 처리합니다.
+  await completeRoomIfDone(s.roomId)
 }
 
-export async function sendReaction(reaction: ReactionKind): Promise<void> {
+let lastReactionAt = 0
+
+export async function sendReaction(
+  reaction: ReactionKind,
+  text?: string,
+): Promise<void> {
   const s = store()
   if (!s.roomId || !s.myId) return
+  // 5초에 1회 — 자유 채팅 방지
+  if (Date.now() - lastReactionAt < 5000) return
+  lastReactionAt = Date.now()
+  const clean = text ? sanitizeReactionText(text) : undefined
   const event: RoomEvent = {
     id: crypto.randomUUID(),
     type: 'reaction_sent',
     participantId: s.myId,
     nickname: useUserStore.getState().nickname,
     reaction,
+    reactionText: clean && clean.length >= 2 ? clean : undefined,
     timestamp: Date.now(),
   }
   handleEvent(event)
@@ -396,6 +532,25 @@ export async function leaveRoom(): Promise<void> {
   if (reconnectTimer) window.clearTimeout(reconnectTimer)
   if (pollTimer) window.clearInterval(pollTimer)
   pollTimer = null
+  if (heartbeatTimer) window.clearInterval(heartbeatTimer)
+  heartbeatTimer = null
+  // 서버 쪽 멤버 행 정리 — 마지막 참가자면 방을 closed 처리하고,
+  // 방장이 나가면 남은 참가자에게 방장을 넘깁니다. (leave_room RPC)
+  // 마이그레이션 전(함수 없음)이나 오프라인이면 조용히 건너뜁니다.
+  try {
+    const s = store()
+    const supabase = await getSupabase()
+    if (supabase && s.roomId) {
+      await supabase.rpc('leave_room', { p_room_id: s.roomId })
+    }
+  } catch {
+    /* 정리는 최선 노력 — 실패해도 로컬 종료는 계속 */
+  }
+  try {
+    sessionStorage.removeItem(REJOIN_KEY)
+  } catch {
+    /* 무시 */
+  }
   await channel?.unsubscribe()
   channel = null
   giraffe = createGiraffeSync()

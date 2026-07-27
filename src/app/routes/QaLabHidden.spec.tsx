@@ -13,6 +13,9 @@ const OFF = {
   pictureInPicture: false,
   qaLab: false,
   optionalSlouchCalibration: false,
+  campusTheme: false,
+  campusTerritory: false,
+  campusSchoolPicker: false,
 }
 
 vi.mock('@/lib/feature-flags/flags', () => ({
@@ -25,6 +28,9 @@ const { App } = await import('@/app/App')
 const { useGameStore } = await import('@/features/game/gameStore')
 const { usePostureStore } = await import('@/features/posture-engine/postureStore')
 const { useDemoStore } = await import('@/features/demo/demoMode')
+const { useProgressionStore } = await import(
+  '@/features/progression/progressionStore'
+)
 
 function renderAt(path: string) {
   return render(
@@ -39,6 +45,7 @@ describe('QA Lab 숨김', () => {
     useGameStore.getState().reset()
     usePostureStore.getState().reset()
     useDemoStore.getState().disableDemo()
+    useProgressionStore.getState().reset()
   })
 
   it('/lab 은 라우트가 없고 홈으로 되돌아간다', () => {
@@ -60,6 +67,7 @@ describe('QA Lab 숨김', () => {
     renderAt('/session/demo')
 
     expect(screen.queryByText('QA Lab · 상태 주입')).not.toBeInTheDocument()
-    expect(screen.getByText('마감괴수 D-DAY')).toBeInTheDocument()
+    // 기본(도서관) 모드의 마감 괴물이 표시된다
+    expect(screen.getByText('책더미 괴물 북몽이')).toBeInTheDocument()
   })
 })

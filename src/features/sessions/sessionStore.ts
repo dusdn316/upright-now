@@ -5,12 +5,14 @@ import {
   type SessionTimeState,
 } from './sessionMachine'
 import { releaseSessionLocks } from './sessionLocks'
-import { DEFAULT_SESSION_LENGTH_ID, getSessionLength } from '@/constants/session'
+import { clampCustomFocusMin, clampCustomRestMin, DEFAULT_SESSION_LENGTH_ID, getSessionLength } from '@/constants/session'
 import { DEFAULT_PROFILE_ID } from '@/constants/profiles'
 import type { LearningProfileKind, PostureState, SessionMode } from '@/types'
 
 interface SessionStoreState extends SessionTimeState {
   sessionId: string
+  /** start() 를 누른 시각 (epoch ms). 요약의 날짜 집계에 씁니다. */
+  startedAt: number
   subject: string
   goal: string
   lengthId: string
@@ -24,6 +26,8 @@ interface SessionStoreState extends SessionTimeState {
     subject?: string
     goal?: string
     lengthId?: string
+    customFocusMin?: number
+    customRestMin?: number
     profileId?: LearningProfileKind
     mode?: SessionMode
   }) => void
@@ -31,6 +35,9 @@ interface SessionStoreState extends SessionTimeState {
   tick: (deltaMs: number, posture: PostureState) => void
   pause: () => void
   resume: () => void
+  /** 세션 중 스트레칭 — 타이머·자세 판정을 멈추고 같은 세션으로 돌아옵니다. */
+  beginRest: () => void
+  endRest: () => void
   finish: (status: 'completed' | 'aborted') => void
   /** QA 데모용 — 남은 시간을 건너뛰고 정상 완료 상태로 만듭니다. */
   completeNow: () => void
@@ -43,6 +50,7 @@ const defaultLength = getSessionLength(DEFAULT_SESSION_LENGTH_ID)
 const initialState = {
   ...createSessionTimeState(defaultLength.focusSec * 1000),
   sessionId: 'demo',
+  startedAt: 0,
   subject: '',
   goal: '',
   lengthId: DEFAULT_SESSION_LENGTH_ID,
@@ -55,16 +63,36 @@ const initialState = {
 export const useSessionStore = create<SessionStoreState>((set) => ({
   ...initialState,
 
-  configure: ({ subject, goal, lengthId, profileId, mode }) =>
+  configure: ({ subject, goal, lengthId, profileId, mode, customFocusMin, customRestMin }) =>
     set((s) => {
+      // 1분 빠른 점검 — 카메라·연출 확인 전용, 보상·출석·집계 없음
+      if (lengthId === 'test') {
+        return {
+          ...s,
+          lengthId: 'test',
+          plannedMs: 60_000,
+          restSec: 0,
+          mode: mode ?? s.mode,
+          subject: subject ?? s.subject,
+          goal: goal ?? s.goal,
+          profileId: profileId ?? s.profileId,
+        }
+      }
       const nextLengthId = lengthId ?? s.lengthId
-      const option = getSessionLength(nextLengthId)
+      // 직접 설정: 집중 5~120분(5분 단위) · 회복 휴식 0~30분
+      const custom = nextLengthId === 'custom'
+      const focusSec = custom
+        ? clampCustomFocusMin(customFocusMin ?? s.plannedMs / 60000) * 60
+        : getSessionLength(nextLengthId).focusSec
+      const restSec = custom
+        ? clampCustomRestMin(customRestMin ?? s.restSec / 60) * 60
+        : getSessionLength(nextLengthId).restSec
       return {
         subject: subject ?? s.subject,
         goal: goal ?? s.goal,
         lengthId: nextLengthId,
-        plannedMs: option.focusSec * 1000,
-        restSec: option.restSec,
+        plannedMs: focusSec * 1000,
+        restSec,
         profileId: profileId ?? s.profileId,
         mode: mode ?? s.mode,
       }
@@ -76,6 +104,7 @@ export const useSessionStore = create<SessionStoreState>((set) => ({
     set((s) => ({
       ...createSessionTimeState(s.plannedMs),
       sessionId,
+      startedAt: Date.now(),
       status: 'running',
     }))
   },
@@ -86,6 +115,15 @@ export const useSessionStore = create<SessionStoreState>((set) => ({
   pause: () => set((s) => (s.status === 'running' ? { status: 'paused' } : s)),
 
   resume: () => set((s) => (s.status === 'paused' ? { status: 'running' } : s)),
+
+  beginRest: () =>
+    set((s) =>
+      s.status === 'running' || s.status === 'paused'
+        ? { status: 'resting' }
+        : s,
+    ),
+
+  endRest: () => set((s) => (s.status === 'resting' ? { status: 'running' } : s)),
 
   finish: (status) => set({ status }),
 

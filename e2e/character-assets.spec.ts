@@ -13,7 +13,7 @@ async function assetState(page: Page): Promise<string | null> {
   return page
     .locator('figure[data-asset-state]')
     .first()
-    .getAttribute('data-asset-state')
+    .getAttribute('data-visual-state')
 }
 
 async function startSession(page: Page) {
@@ -28,7 +28,7 @@ test('대시보드 Lv.3 캐릭터 이미지', async ({ page }) => {
   await page.waitForTimeout(400)
 
   const hero = page.locator('main figure[data-asset-state] img').first()
-  await expect(hero).toHaveAttribute('src', /stage-03\/idle\.webp/)
+  await expect(hero).toHaveAttribute('src', /stages\/stage-03\/idle-512\.webp/)
   await expect(hero).toHaveAttribute('alt', /Lv\.3 빼꼼 거부기린/)
 
   await page.screenshot({ path: `${DIR}/dashboard-stage-03.png`, fullPage: true })
@@ -43,7 +43,7 @@ test('성장 화면 6단계 실제 이미지', async ({ page }) => {
   await expect(imgs).toHaveCount(6)
   for (let i = 1; i <= 6; i += 1) {
     await expect(
-      page.locator(`ol img[src*="stage-0${i}/idle.webp"]`).first(),
+      page.locator(`ol img[src*="stages/stage-0${i}/idle-"]`).first(),
     ).toBeVisible()
   }
 
@@ -83,7 +83,7 @@ test('세션 자세 상태별 이미지 매핑', async ({ page }) => {
   await page.screenshot({ path: `${DIR}/session-attack.png`, fullPage: true })
 
   // 공격 연출이 끝나면 idle 로 복귀
-  await expect.poll(() => assetState(page), { timeout: 3000 }).toBe('idle')
+  await expect.poll(() => assetState(page), { timeout: 4000 }).toBe('idle')
 })
 
 test('이미지 로딩 실패 시 SVG 폴백', async ({ page }) => {

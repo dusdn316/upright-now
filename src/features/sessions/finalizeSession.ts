@@ -6,8 +6,12 @@ import { applyReward } from '@/features/game/rewards'
 import { useProgressionStore } from '@/features/progression/progressionStore'
 import { useDemoStore } from '@/features/demo/demoMode'
 import { registerSessionLockRelease } from './sessionLocks'
-import { useRoomStore } from '@/features/rooms/roomStore'
+import { isRoomSessionActive } from '@/features/rooms/roomStore'
 import { reportSessionComplete } from '@/features/rooms/roomService'
+import { kstDateKey } from '@/lib/time/kst'
+import { sessionCompletionReward } from '@/constants/game'
+import { computeStreak, STREAK_MILESTONES } from '@/features/progression/streak'
+import { playSound } from '@/features/sound/soundEngine'
 
 /**
  * 세션 종료의 단일 진입점 — atomic 하게 한 번만 실행됩니다.
@@ -37,29 +41,62 @@ export function finalizeSession(reason: 'timer' | 'manual'): {
   }
   finalizedSessionIds.add(sessionId)
 
-  const completed =
+  const timeOk =
     reason === 'timer' ||
     (session.plannedMs > 0 && session.elapsedMs >= COMPLETION_RATIO * session.plannedMs)
 
-  const status = completed ? ('completed' as const) : ('aborted' as const)
   const isDemo = useDemoStore.getState().isDemo
 
-  if (completed) {
+  // 비데모 세션에서 자세 감지가 0초였다면(기준 미등록·카메라 미동작)
+  // 완주 보상·출석·상점 해제 대상이 아닙니다. 진행 시간은 중단 기록으로 남깁니다.
+  const detectionOk = isDemo || session.detectableMs > 0
+  const completed = timeOk && detectionOk
+  // 1분 빠른 점검 — 완료해도 보상·출석·상점·괴물 진행에 반영하지 않습니다.
+  const isTest = session.lengthId === 'test'
+  const completionReason: NonNullable<
+    import('@/types').SessionSummary['completionReason']
+  > = isTest ? 'test' : completed ? 'normal' : !detectionOk ? 'no-detection' : 'under-80'
+
+  const status = completed ? ('completed' as const) : ('aborted' as const)
+
+  if (completed && !isTest) {
     // 기본 공격 (eventId 로 중복 차단)
     useGameStore.getState().sessionCompleted(`session-complete-${sessionId}`)
     // 친구 방 세션이면 공동 보스에도 완주 공격을 보냅니다.
-    if (useRoomStore.getState().phase === 'running') {
+    if (isRoomSessionActive()) {
       void reportSessionComplete()
     }
-    // 완주 보상 — 반드시 applyReward 를 통해서만
+    // 완주 보상 — 반드시 applyReward 를 통해서만 (경제 v2: 길이별)
     applyReward({
       id: `session-complete-xp-${sessionId}`,
       sessionId,
       type: 'session_completed',
+      override: sessionCompletionReward(Math.round(session.plannedMs / 60000)),
     })
+    // 친구 방 공동 완주 추가 보너스 (세션당 1회)
+    if (isRoomSessionActive()) {
+      applyReward({
+        id: `friend-bonus-${sessionId}`,
+        sessionId,
+        type: 'friend_session_bonus',
+      })
+    }
     if (!isDemo) {
-      const dateKey = new Date().toISOString().slice(0, 10)
+      // 출석 날짜는 KST 기준으로 통일합니다.
+      const dateKey = kstDateKey()
       useProgressionStore.getState().completeSessionMark(dateKey)
+      // 연속 출석 마일스톤 — 같은 날짜 중복 지급은 claimKey 가 차단합니다.
+      const prog = useProgressionStore.getState()
+      const streak = computeStreak(prog.attendance, dateKey)
+      const milestone = STREAK_MILESTONES.find((m) => m.days === streak.current)
+      if (milestone) {
+        const granted = prog.grantStreakBonus(
+          `streak-${milestone.days}:${dateKey}`,
+          milestone.points,
+          milestone.badge ? `streak-${milestone.days}` : undefined,
+        )
+        if (granted) playSound('attendance_bonus')
+      }
     }
   }
 
@@ -72,6 +109,7 @@ export function finalizeSession(reason: 'timer' | 'manual'): {
           useSessionStore.getState(),
           useGameStore.getState(),
           status,
+          { isTest: isTest || undefined, completionReason },
         ),
       )
   }

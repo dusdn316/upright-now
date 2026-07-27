@@ -18,6 +18,8 @@ interface ProgressionStoreState {
   xp: number
   points: number
   attendance: string[]
+  streakClaims: string[]
+  badges: string[]
   completedSessions: number
   inventory: string[]
   equipped: EquippedItems
@@ -31,6 +33,8 @@ interface ProgressionStoreState {
   logXpGain: (label: string, xp: number) => void
   markAttendance: (dateKey: string) => void
   completeSessionMark: (dateKey: string) => void
+  /** streak 마일스톤 포인트 지급 — claimKey 로 같은 날 중복 차단 */
+  grantStreakBonus: (claimKey: string, points: number, badge?: string) => boolean
   /** 구매 — 포인트 부족·중복 구매를 막습니다. 성공 여부를 돌려줍니다. */
   purchaseItem: (itemId: string, price: number) => boolean
   /** 장착/해제 — 과잠·백팩 각각 하나씩 */
@@ -44,6 +48,8 @@ const initialState = {
   xp: 0,
   points: 0,
   attendance: [] as string[],
+  streakClaims: [] as string[],
+  badges: [] as string[],
   completedSessions: 0,
   inventory: [] as string[],
   equipped: {} as EquippedItems,
@@ -57,6 +63,9 @@ export const useProgressionStore = create<ProgressionStoreState>((set, get) => (
   ...initialState,
   ...persisted,
   recentXp: persisted.recentXp ?? [],
+  // 구버전 저장분에는 없는 신규 필드 — undefined 덮어쓰기 방지
+  streakClaims: persisted.streakClaims ?? [],
+  badges: persisted.badges ?? [],
 
   addXp: (amount) => set((s) => ({ xp: s.xp + Math.max(0, amount) })),
 
@@ -78,6 +87,22 @@ export const useProgressionStore = create<ProgressionStoreState>((set, get) => (
    * 세션 완료 표식 — 출석·완료 수·상점 해제만 갱신합니다.
    * XP·포인트는 rewards.applyReward 가 유일한 적립 경로입니다.
    */
+  grantStreakBonus: (claimKey, points, badge) => {
+    let granted = false
+    set((s) => {
+      if (s.streakClaims.includes(claimKey)) return s
+      granted = true
+      return {
+        ...s,
+        points: s.points + points,
+        streakClaims: [...s.streakClaims, claimKey],
+        badges:
+          badge && !s.badges.includes(badge) ? [...s.badges, badge] : s.badges,
+      }
+    })
+    return granted
+  },
+
   completeSessionMark: (dateKey) =>
     set((s) => ({
       completedSessions: s.completedSessions + 1,

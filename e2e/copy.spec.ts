@@ -25,6 +25,8 @@ const FORBIDDEN = [
  * QA Lab(/lab) 내부는 개발 도구이므로 예외입니다.
  */
 const INTERNAL = [
+  // 내부 코드명 — 사용자 화면에는 모드별 공식 괴물 이름만 씁니다.
+  /마감괴수/,
   /Phase\s*\d/i,
   /개발용/,
   /QA Lab · 상태 주입/,
@@ -60,7 +62,7 @@ test('서비스명과 기본 세션이 올바르다', async ({ page }) => {
 
   expect(text).toContain('UpRight Now')
   expect(text).toContain('25분 집중')
-  expect(text).toContain('2분 리셋')
+  expect(text).toContain('회복 휴식')
 })
 
 test('영상 미저장·미전송 안내가 있다', async ({ page }) => {

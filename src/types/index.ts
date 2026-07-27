@@ -56,6 +56,8 @@ export interface SessionConfig {
 
 export interface SessionSummary {
   id: string
+  /** 원본 세션 id — 같은 세션이 두 번 저장돼도 집계는 1회만 (구버전 기록엔 없음) */
+  sessionId?: string
   startedAt: number
   endedAt: number
   status: 'completed' | 'aborted'
@@ -74,6 +76,14 @@ export interface SessionSummary {
   xpEarned: number
   pointsEarned: number
   targetProgress?: 'done' | 'mostly' | 'half' | 'little'
+  /** 진행도 한글 라벨 — 과거 기록에 없어도 안전하게 표시 */
+  targetProgressLabel?: string
+  /** 다음 할 일 한 줄 (최대 80자, HTML·제어문자 제거) */
+  nextAction?: string
+  /** 1분 빠른 점검 — 보상·출석·캠퍼스·집계 대상 아님 */
+  isTest?: boolean
+  /** 완료/중단 인정 사유 */
+  completionReason?: 'normal' | 'under-80' | 'no-detection' | 'test'
 }
 
 /* ------------------------------- 학습 프로필 ------------------------------ */

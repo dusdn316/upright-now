@@ -11,11 +11,12 @@ import { BAD_HOLD_MS, type Sensitivity } from '@/constants/posture'
  *
  * - 단순 평균도, 신뢰도 없는 raw max 도 쓰지 않습니다.
  * - 각 특징의 "나빠지는 방향" 편차만 baseline tolerance 단위로 계산합니다.
- * - warning: 신뢰 특징 1개 이상 > 1.0 이 1.5초 지속
- * - bad: 신뢰 특징 2개 이상 > 1.0 (그중 1개는 주 특징) 또는
- *        주 특징 1개 > 1.8 + 품질 good, 5초 지속
- * - good: 사용 중인 모든 특징 < 0.65 가 2초 지속
- * - z(forwardDepthRatio)는 보조: 단독으로 warning/bad 를 만들지 않습니다.
+ * - warning: 주 특징 1개 이상 > 1.0 이 1.5초 지속
+ * - bad: 주 특징 2개 이상 > 1.0 또는 주 특징 1개 > 1.8 + 품질 good, 5초 지속
+ * - good: 주 특징이 모두 < 0.8 이 2초 지속
+ * - z(forwardDepthRatio)는 보조: warning/bad 표가 되지 않고 good 복귀도
+ *   막지 않습니다. (실카메라에서 z 는 조명·거리에 따라 흘러다녀,
+ *   marginal 한 주 특징을 bad 로 승격시키거나 회복을 영영 막던 원인)
  */
 
 /** 나빠지는 방향: +1 = 증가가 이탈, -1 = 감소가 이탈 */
@@ -31,14 +32,19 @@ const DIRECTION: Record<FeatureKey, 1 | -1> = {
 /**
  * 축별 최소 허용 오차 — 캘리브레이션 중 가만히 앉아 MAD 가 0에 가까워도
  * 정상적인 미세 움직임이 이탈로 잡히지 않게 하는 바닥값입니다.
+ *
+ * 좌우 비대칭 축(lateral·tilt·torso)은 앞으로 숙임 감지와 무관하고,
+ * 편안히 앉으면(팔걸이에 기대기 등) 캘리브레이션의 정자세 대비 자연스럽게
+ * 벌어지는 값이라 바닥을 약간 넓게 둡니다. 숙임·접근 축(face·head)은
+ * 거북목 감지의 핵심이므로 그대로 둡니다.
  */
 const FLOOR: Record<FeatureKey, number> = {
   faceScaleRatio: 0.05,
   headHeightRatio: 0.08,
-  lateralOffsetRatio: 0.07,
-  shoulderTiltRatio: 0.06,
+  lateralOffsetRatio: 0.1,
+  shoulderTiltRatio: 0.08,
   forwardDepthRatio: 0.35,
-  torsoLean: 0.08,
+  torsoLean: 0.1,
 }
 
 /** MAD → tolerance 배수 */
@@ -52,7 +58,12 @@ const SENSITIVITY_MULT: Record<Sensitivity, number> = {
 
 export const WARNING_ENTER = 1.0
 export const BAD_STRONG = 1.8
-export const GOOD_EXIT = 0.65
+/**
+ * good 복귀 상한 — 0.65 였을 때는 0.65~1.0 사이에 자리 잡은 편안한 자세가
+ * warning 에서 영영 못 빠져나오는 함정 구간이 너무 넓었습니다.
+ * (히스테리시스는 1.0 진입 / 0.8 복귀로 유지)
+ */
+export const GOOD_EXIT = 0.8
 
 export interface DeviationDetail {
   key: FeatureKey
@@ -115,12 +126,11 @@ export function computeVotes(
   const auxExceedCount = details.filter((d) => !d.primary && d.exceeded).length
   const maxPrimary = primaries.reduce((max, d) => Math.max(max, d.deviation), 0)
 
-  // z 단독 이탈은 warning 도 만들지 않습니다.
+  // z 는 표가 아닙니다: bad 의 두 번째 표도, good 복귀의 거부권도 갖지 않습니다.
   const voteWarning = primaryExceedCount >= 1
   const voteBad =
-    (primaryExceedCount >= 1 && primaryExceedCount + auxExceedCount >= 2) ||
-    (maxPrimary > BAD_STRONG && qualityGood)
-  const voteGood = details.every((d) => d.deviation < GOOD_EXIT)
+    primaryExceedCount >= 2 || (maxPrimary > BAD_STRONG && qualityGood)
+  const voteGood = primaries.every((d) => d.deviation < GOOD_EXIT)
 
   return {
     details,

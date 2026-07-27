@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell, PageHeader } from '@/components/layout/AppShell'
 import { CharacterViewport } from '@/components/character/CharacterViewport'
 import { GrowthTimeline } from '@/components/character/GrowthTimeline'
@@ -16,6 +16,15 @@ import {
 } from '@/features/progression/progressionStore'
 import { applyReward } from '@/features/game/rewards'
 import { useToast } from '@/app/providers/ToastProvider'
+import { useSessionHistoryStore } from '@/features/sessions/sessionHistoryStore'
+import { useDemoStore } from '@/features/demo/demoMode'
+import { MONSTER_THEMES, useActiveModeConfig } from '@/features/modes/modeStore'
+import { sanitizeNextAction } from '@/features/sessions/sessionHistoryStore'
+import type { SessionSummary } from '@/types'
+import {
+  CampusProfileBadge,
+  CampusShareCardFrame,
+} from '@/components/campus/CampusBits'
 
 /**
  * S-12 결과 — docs/05, docs/03 UF-12
@@ -23,17 +32,142 @@ import { useToast } from '@/app/providers/ToastProvider'
  */
 export function Result() {
   const navigate = useNavigate()
+  const { sessionId: paramId = 'demo' } = useParams()
   const stage = useCharacterStage()
   const xp = useProgressionStore((s) => s.xp)
   const session = useSessionStore()
   const game = useGameStore()
-  const [progress, setProgress] = useState<string | null>(null)
+  const summaries = useSessionHistoryStore((s) => s.summaries)
+  const updateSummary = useSessionHistoryStore((s) => s.update)
+  const isDemo = useDemoStore((s) => s.isDemo)
+  const modeConfig = useActiveModeConfig()
+  // 새로고침해도 유지 — 저장된 기록에서 초기값을 복원합니다.
+  const storedSummary = summaries.find(
+    (x) => x.sessionId === session.sessionId || x.id === session.sessionId,
+  )
+  const [progress, setProgress] = useState<string | null>(
+    () => storedSummary?.targetProgress ?? null,
+  )
+  const [nextAction, setNextAction] = useState(
+    () => storedSummary?.nextAction ?? '',
+  )
+  const REASON_LABEL: Record<string, string> = {
+    normal: '정상 완료',
+    'under-80': '계획 시간 80% 미만',
+    'no-detection': '감지 가능 시간 없음',
+    test: '1분 테스트',
+  }
+  const reasonLabel = storedSummary?.completionReason
+    ? REASON_LABEL[storedSummary.completionReason]
+    : null
+  const monsterName =
+    session.mode === 'room'
+      ? MONSTER_THEMES.komong.name
+      : MONSTER_THEMES[modeConfig.monsterTheme].name
   const { push } = useToast()
+
+  // URL 의 세션 id 를 실제로 검증합니다.
+  // - 현재 세션 id 와 일치(또는 데모) → 현재 결과
+  // - 과거 세션 id → 기록에서 조회해 표시
+  // - 둘 다 아니면 가짜 0초 결과를 만들지 않고 '결과를 찾을 수 없어요'
+  const isCurrent =
+    isDemo || (session.sessionId === paramId && session.status !== 'idle')
+  const pastSummary = isCurrent
+    ? undefined
+    : summaries.find((s) => s.sessionId === paramId || s.id === paramId)
+
+  if (!isCurrent && pastSummary) {
+    const past = pastSummary
+    return (
+      <AppShell chrome="focus">
+        <PageHeader
+          back={() => navigate(ROUTES.history)}
+          title="지난 세션 결과"
+          description={new Date(past.endedAt).toLocaleString('ko-KR')}
+          action={
+            <Badge tone={past.status === 'completed' ? 'green' : 'muted'}>
+              {past.status === 'completed' ? '완료' : '중도 종료'}
+            </Badge>
+          }
+        />
+        <Card>
+          <CardTitle>자세 요약</CardTitle>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <StatTile label="학습 세션 시간" value={formatDuration(past.elapsedMs)} tone="canvas" />
+            <StatTile label="감지 가능 시간" value={formatDuration(past.detectableMs)} tone="canvas" />
+            <StatTile
+              label="회복 성공 / 회복 기회"
+              value={`${past.recoveries} / ${past.recoveryOpportunities}`}
+              tone="canvas"
+            />
+            <StatTile label="최고 콤보" value={String(past.bestCombo)} unit="회" tone="canvas" />
+            <StatTile label="몬스터 피해량" value={String(past.damageDealt)} tone="canvas" />
+            <StatTile label="획득" value={`${past.xpEarned} XP · ${past.pointsEarned}P`} tone="canvas" />
+          </div>
+        </Card>
+        {(past.goal || past.targetProgressLabel || past.nextAction) && (
+          <Card className="mt-4">
+            <CardTitle>과제 메모</CardTitle>
+            <dl className="mt-3 flex flex-col gap-1.5 text-sm">
+              {past.goal && (
+                <div className="flex gap-2">
+                  <dt className="shrink-0 text-ink-soft">목표</dt>
+                  <dd className="font-semibold text-ink">{past.goal}</dd>
+                </div>
+              )}
+              {past.targetProgressLabel && (
+                <div className="flex gap-2">
+                  <dt className="shrink-0 text-ink-soft">진행도</dt>
+                  <dd className="font-semibold text-ink">{past.targetProgressLabel}</dd>
+                </div>
+              )}
+              {past.nextAction && (
+                <div className="flex gap-2">
+                  <dt className="shrink-0 text-ink-soft">다음 할 일</dt>
+                  <dd className="font-semibold text-ink">{past.nextAction}</dd>
+                </div>
+              )}
+            </dl>
+          </Card>
+        )}
+        <div className="mt-4 flex gap-2">
+          <Button variant="secondary" onClick={() => navigate(ROUTES.history)}>
+            기록 보기
+          </Button>
+          <Button onClick={() => navigate(ROUTES.home)}>대시보드로</Button>
+        </div>
+      </AppShell>
+    )
+  }
+
+  if (!isCurrent) {
+    return (
+      <AppShell chrome="focus">
+        <PageHeader
+          back={() => navigate(ROUTES.home)}
+          title="결과를 찾을 수 없어요"
+          description="주소가 잘못됐거나 이미 정리된 세션이에요. 기록 화면에서 지난 세션을 볼 수 있어요."
+        />
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => navigate(ROUTES.history)}>
+            기록 보기
+          </Button>
+          <Button onClick={() => navigate(ROUTES.home)}>대시보드로</Button>
+        </div>
+      </AppShell>
+    )
+  }
 
   const completed = session.status === 'completed'
 
   const selectProgress = (id: string) => {
     setProgress(id)
+    // 같은 sessionId 기록을 제자리 업데이트 — 중복 기록을 만들지 않습니다.
+    const option = TARGET_PROGRESS_OPTIONS.find((o) => o.id === id)
+    updateSummary(session.sessionId, {
+      targetProgress: id as SessionSummary['targetProgress'],
+      targetProgressLabel: option?.label,
+    })
     // 목표 완료 자기보고 → 보너스 (세션당 1회, applyReward 가 중복 차단)
     if (id === 'done' && completed) {
       const reward = applyReward({
@@ -54,15 +188,17 @@ export function Result() {
   return (
     <AppShell chrome="focus">
       <PageHeader
+        back={() => navigate(ROUTES.home)}
         title={
           completed
             ? `오늘의 ${Math.round(session.plannedMs / 60000)}분을 마쳤어요.`
             : '여기까지의 기록을 정리했어요.'
         }
         description={
-          completed
-            ? '회복 행동이 마감괴수에게 그대로 전달됐어요.'
-            : '다음에 이어서 시작해도 괜찮아요.'
+          (completed
+            ? `회복 행동이 ${monsterName}에게 그대로 전달됐어요.`
+            : '다음에 이어서 시작해도 괜찮아요.') +
+          (reasonLabel ? ` (인정 사유: ${reasonLabel})` : '')
         }
         action={<Badge tone={completed ? 'green' : 'muted'}>{completed ? '완료' : '중도 종료'}</Badge>}
       />
@@ -72,7 +208,7 @@ export function Result() {
           <Card tone="pink">
             <CardTitle>보스 전투 결과</CardTitle>
             <div className="mt-4">
-              <BossHealthBar hp={game.boss.hp} maxHp={game.boss.maxHp} />
+              <BossHealthBar hp={game.boss.hp} maxHp={game.boss.maxHp} name={monsterName} />
             </div>
             <div className="mt-4">
               <StatTile
@@ -116,16 +252,25 @@ export function Result() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <Card tone="yellow">
-            <div className="flex flex-col items-center text-center">
-              <CharacterViewport stage={stage} size={140} />
-              <CardTitle>이번에 얻은 보상</CardTitle>
-              <div className="mt-3 grid w-full grid-cols-2 gap-2">
-                <StatTile label="경험치" value={`${game.sessionXp}`} unit="XP" tone="surface" />
-                <StatTile label="잎사귀" value={`${game.sessionPoints}`} unit="P" tone="surface" />
+          {/*
+            결과 공유 카드 — 캠퍼스 테마가 켜져 있으면 학교 색 테두리가 감쌉니다.
+            플래그가 꺼져 있으면 CampusShareCardFrame 이 자식을 그대로 통과시킵니다.
+          */}
+          <CampusShareCardFrame>
+            <Card tone="yellow">
+              <div className="flex flex-col items-center text-center">
+                <CharacterViewport stage={stage} size={140} />
+                <CardTitle>이번에 얻은 보상</CardTitle>
+                <div className="mt-2 empty:hidden">
+                  <CampusProfileBadge />
+                </div>
+                <div className="mt-3 grid w-full grid-cols-2 gap-2">
+                  <StatTile label="경험치" value={`${game.sessionXp}`} unit="XP" tone="surface" />
+                  <StatTile label="잎사귀" value={`${game.sessionPoints}`} unit="P" tone="surface" />
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          </CampusShareCardFrame>
 
           <Card>
             <CardTitle>이번 목표를 얼마나 진행했나요?</CardTitle>
@@ -141,6 +286,23 @@ export function Result() {
                 </Button>
               ))}
             </div>
+            <label className="mt-3 flex flex-col gap-1 text-xs">
+              <span className="font-semibold text-ink-soft">다음 할 일 (선택)</span>
+              <input
+                maxLength={80}
+                placeholder="예: 4장 예제 2개 풀기"
+                value={nextAction}
+                onChange={(e) => setNextAction(e.target.value)}
+                onBlur={() => {
+                  const clean = sanitizeNextAction(nextAction)
+                  setNextAction(clean)
+                  updateSummary(session.sessionId, {
+                    nextAction: clean || undefined,
+                  })
+                }}
+                className="h-9 rounded-xl border border-line bg-surface px-2 text-sm"
+              />
+            </label>
             <p className="mt-3 text-xs text-ink-soft">
               자세로 집중 여부를 추론하지 않아요. 진행도는 직접 남기는 값이에요.
             </p>

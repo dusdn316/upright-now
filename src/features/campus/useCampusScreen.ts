@@ -1,0 +1,72 @@
+import { useEffect, useMemo } from 'react'
+import { initCampus, setCampusScreenOpen, useCampusStore } from './campusStore'
+import { useCampusThemeStore } from './campusThemeStore'
+import { rankStandings } from './contribution'
+import { seasonAt } from './season'
+import { createSeasonMap } from './campusMap'
+import type { CampusSnapshot } from './types'
+
+/**
+ * 캠퍼스 화면 공통 진입 훅.
+ *
+ * 저장소를 준비하고(mock 기본), 실시간 갱신을 켜고, 화면에 필요한 파생값을 만듭니다.
+ * 저장소 종류(mock/supabase)는 화면이 알 필요가 없습니다.
+ */
+export function useCampusScreen() {
+  const status = useCampusStore((s) => s.status)
+  const source = useCampusStore((s) => s.source)
+  const stored = useCampusStore((s) => s.snapshot)
+  const errorMessage = useCampusStore((s) => s.errorMessage)
+  const realtimeStatus = useCampusStore((s) => s.realtimeStatus)
+  const pendingContributionCount = useCampusStore((s) => s.pendingContributionCount)
+  const lastAcceptedAt = useCampusStore((s) => s.lastAcceptedAt)
+  const lastSyncedAt = useCampusStore((s) => s.lastSyncedAt)
+  const schoolId = useCampusThemeStore((s) => s.schoolId)
+
+  useEffect(() => {
+    void initCampus()
+  }, [schoolId])
+
+  // 캠퍼스 화면이 열려 있는 동안만 Realtime 미연결 폴백 polling 이 돕니다.
+  useEffect(() => {
+    setCampusScreenOpen(true)
+    return () => setCampusScreenOpen(false)
+  }, [])
+
+  // 첫 로딩 중에도 레이아웃이 흔들리지 않도록 빈 지도를 씁니다.
+  const snapshot: CampusSnapshot = useMemo(() => {
+    if (stored) return stored
+    const now = Date.now()
+    const season = seasonAt(now)
+    return {
+      season,
+      tiles: createSeasonMap(season.id, now),
+      standings: [],
+      tileEvents: [],
+      myContribution: 0,
+      archived: [],
+    }
+  }, [stored])
+
+  const myTiles = useMemo(
+    () =>
+      schoolId ? snapshot.tiles.filter((t) => t.ownerSchoolId === schoolId).length : 0,
+    [snapshot.tiles, schoolId],
+  )
+
+  const standings = useMemo(() => rankStandings(snapshot.standings), [snapshot.standings])
+
+  return {
+    status,
+    source,
+    snapshot,
+    standings,
+    myTiles,
+    schoolId,
+    errorMessage,
+    realtimeStatus,
+    pendingContributionCount,
+    lastAcceptedAt,
+    lastSyncedAt,
+  }
+}

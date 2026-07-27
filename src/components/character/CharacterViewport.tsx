@@ -29,13 +29,15 @@ export interface CharacterViewportProps {
   visualState?: CharacterVisualIntent
   /** 값이 바뀌면 공격 이미지를 잠깐 보여준 뒤 원래 상태로 돌아옵니다. */
   attackTick?: number
+  /** 공격 이미지 유지 시간 — 메인 900ms, PIP 축약 연출은 1500ms 내에서 사용 */
+  attackDurationMs?: number
   size?: number
   className?: string
   /** 성장 타임라인처럼 장식으로만 쓸 때 */
   decorative?: boolean
 }
 
-const ATTACK_MS = 900
+
 const CROSSFADE_MS = 220
 
 /** 이미지가 없을 때 쓰는 SVG 폴백용 상태 변환 */
@@ -46,6 +48,7 @@ const ASSET_TO_SVG: Record<CharacterAssetState, CharacterVisualState> = {
   recover: 'recover',
   attack: 'recover',
   away: 'away',
+  unstable: 'idle',
 }
 
 export function CharacterViewport({
@@ -53,6 +56,7 @@ export function CharacterViewport({
   postureState = 'good',
   visualState = 'idle',
   attackTick = 0,
+  attackDurationMs = 900,
   size = 200,
   className = '',
   decorative = false,
@@ -68,9 +72,9 @@ export function CharacterViewport({
   useEffect(() => {
     if (attackTick <= 0) return
     setAttacking(true)
-    const timer = window.setTimeout(() => setAttacking(false), ATTACK_MS)
+    const timer = window.setTimeout(() => setAttacking(false), attackDurationMs)
     return () => window.clearTimeout(timer)
-  }, [attackTick])
+  }, [attackTick, attackDurationMs])
 
   const assetState = resolveAssetState(
     postureState,
@@ -128,9 +132,17 @@ export function CharacterViewport({
 
   return (
     <figure
-      className={`relative m-0 shrink-0 ${dimClass} ${className}`}
+      className={[
+        'relative m-0 shrink-0',
+        // 상태 연출은 별도 이미지가 아니라 CSS 로 — index.css char-state-*
+        `char-state-${assetState}`,
+        `char-stage-${stage}`,
+        dimClass,
+        className,
+      ].join(' ')}
       style={{ width: size, height: size }}
       data-asset-state={resolved ? resolved.state : 'svg-fallback'}
+      data-visual-state={assetState}
     >
       {current ? (
         <>

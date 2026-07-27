@@ -18,16 +18,22 @@ export type RewardType =
   | 'session_completed'
   | 'stretch_completed'
   | 'goal_completed'
+  | 'friend_session_bonus'
 
 const REWARD_TABLE: Record<RewardType, { xp: number; points: number }> = {
   recovery_success: REWARD.recovery,
   session_completed: REWARD.sessionCompleted,
   stretch_completed: REWARD.stretch,
   goal_completed: REWARD.goalCompleted,
+  friend_session_bonus: REWARD.roomCompleted,
 }
 
 /** 세션 중 화면 집계(획득 XP·잎사귀)에 반영되는 종류 */
-const SESSION_SCOPED: RewardType[] = ['recovery_success', 'session_completed']
+const SESSION_SCOPED: RewardType[] = [
+  'recovery_success',
+  'session_completed',
+  'friend_session_bonus',
+]
 
 /** 최근 획득 XP 목록에 남길 이름 */
 const REWARD_LABEL: Record<RewardType, string> = {
@@ -35,18 +41,32 @@ const REWARD_LABEL: Record<RewardType, string> = {
   session_completed: '세션 완주',
   stretch_completed: '스트레칭',
   goal_completed: '목표 완료',
+  friend_session_bonus: '친구 공동 완주',
 }
 
 const appliedIds = new Set<string>()
 const recoveryCountBySession = new Map<string, number>()
+/** 세션별로 적립한 보상 id — 같은 sessionId 재시작 시 함께 풀어줍니다. */
+const idsBySession = new Map<string, Set<string>>()
 
-// 세션 재시작 시 회복 보상 상한을 초기화합니다.
-registerSessionLockRelease((sessionId) => recoveryCountBySession.delete(sessionId))
+// 세션 재시작 시 회복 보상 상한과 해당 세션의 보상 id 잠금을 초기화합니다.
+// (동일 실행 중 중복 클릭은 appliedIds 가 계속 차단하고,
+//  잠금 해제는 sessionStore.start() 시점에만 일어납니다)
+registerSessionLockRelease((sessionId) => {
+  recoveryCountBySession.delete(sessionId)
+  const ids = idsBySession.get(sessionId)
+  if (ids) {
+    for (const id of ids) appliedIds.delete(id)
+    idsBySession.delete(sessionId)
+  }
+})
 
 export interface RewardInput {
   id: string
   sessionId: string
   type: RewardType
+  /** 길이별 세션 완주처럼 표 대신 쓸 지급량 (경제 v2) */
+  override?: { xp: number; points: number }
 }
 
 export interface RewardOutcome {
@@ -64,8 +84,13 @@ export function applyReward(input: RewardInput): RewardOutcome {
     return { applied: false, xp: 0, points: 0, capped: false }
   }
   appliedIds.add(id)
+  if (sessionId) {
+    const ids = idsBySession.get(sessionId) ?? new Set<string>()
+    ids.add(id)
+    idsBySession.set(sessionId, ids)
+  }
 
-  let { xp, points } = REWARD_TABLE[type]
+  let { xp, points } = input.override ?? REWARD_TABLE[type]
   let capped = false
 
   if (type === 'recovery_success') {
@@ -101,4 +126,5 @@ export function resetSessionRewards(sessionId: string): void {
 export function resetRewardsForTest(): void {
   appliedIds.clear()
   recoveryCountBySession.clear()
+  idsBySession.clear()
 }

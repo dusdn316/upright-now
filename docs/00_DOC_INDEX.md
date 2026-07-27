@@ -34,6 +34,20 @@
 | 20 | DECISION_LOG | 확정 결정과 근거 |
 | 21 | RESEARCH_BASIS | 문제 정의 근거 요약 |
 
+## 캠퍼스 프로토타입 (브랜치 `feat/campus-territory-prototype`)
+
+기능 플래그 기본값이 `false` 인 별도 프로토타입 문서입니다.
+대학 인증이 없는 **비공식** 테마·게임이며, Production 에는 노출되지 않습니다.
+
+| 문서 | 역할 |
+|---|---|
+| CAMPUS_THEME_SPEC | 학교 선택과 테마가 바꾸는 것 / 바꾸지 않는 것 |
+| CAMPUS_TERRITORY_SPEC | 가상 캠퍼스 지도·기여도·점령·시즌·실시간 |
+| CAMPUS_DATA_MODEL | 로컬 저장 · Supabase 테이블 · RPC · RLS · 개인정보 경계 |
+| CAMPUS_QA_CHECKLIST | 플래그 ON/OFF 회귀·레이아웃·접근성·개인정보·문구 검사 |
+| CAMPUS_DECISIONS_NEEDED | 가정으로 진행한 항목과 바꿀 지점 |
+| CAMPUS_NOTION_SECTION | Notion 붙여넣기용 요약 |
+
 ## 대상별 읽기 순서
 
 ### 기획·발표

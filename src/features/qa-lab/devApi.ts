@@ -9,6 +9,10 @@ import { usePipStore } from '@/features/pip/pipStore'
 import { useCharacterVisualStore } from '@/features/posture-engine/characterVisualStore'
 import { CHARACTER_STAGES } from '@/constants/game'
 import type { CharacterStage, PostureState } from '@/types'
+import { useCalibrationStore } from '@/features/calibration/calibrationStore'
+import { useUserStore } from '@/features/onboarding/userStore'
+import { useRoomStore } from '@/features/rooms/roomStore'
+import { makeProfile } from '@/features/posture-engine/testFixtures'
 
 /**
  * 개발·E2E 전용 조작 API.
@@ -28,11 +32,17 @@ export interface UprightDevApi {
   completeSession: () => void
   setStage: (stage: CharacterStage) => void
   enableDemo: () => void
+  /** e2e 용 — 세션·스트레칭 타이머 배속 */
+  setTimeScale: (scale: number) => void
   /** 캐릭터 이미지 로딩 실패 상황을 흉내 냅니다. (SVG 폴백 확인용) */
   setImagesBroken: (value: boolean) => void
   reset: () => void
   /** PiP 상태 조회 (e2e 검증용) */
   getPipState: () => { open: boolean; fallback: boolean }
+  /** e2e 용 — 합성 자세 기준 주입 + 카메라 준비 플래그 */
+  injectTestCalibration: () => void
+  /** e2e 진단용 — 방 반응 수신 상태 */
+  getRoomDebug: () => { reactions: number; phase: string; connection: string }
 }
 
 declare global {
@@ -79,8 +89,22 @@ export function createDevApi(): UprightDevApi {
 
     enableDemo: () => useDemoStore.getState().enableDemo(),
 
+    setTimeScale: (scale) => useSessionStore.getState().setTimeScale(scale),
+
     setImagesBroken: (value) =>
       useQaFlagsStore.getState().setCharacterImagesBroken(value),
+
+    getRoomDebug: () => ({
+      reactions: useRoomStore.getState().reactions.length,
+      phase: useRoomStore.getState().phase,
+      connection: useRoomStore.getState().connection,
+    }),
+
+    injectTestCalibration: () => {
+      useCalibrationStore.getState().addProfile(makeProfile())
+      useUserStore.getState().setCalibrated(true)
+      useRoomStore.getState().patch({ myCameraReady: true, myModelReady: true })
+    },
 
     getPipState: () => ({
       open: usePipStore.getState().pipOpen,

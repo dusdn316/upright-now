@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { CharacterViewport } from '@/components/character/CharacterViewport'
@@ -30,19 +31,38 @@ import { useGameStore } from '@/features/game/gameStore'
 import { usePostureStore } from '@/features/posture-engine/postureStore'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useDemoStore } from '@/features/demo/demoMode'
+import { MONSTER_THEMES, useActiveModeConfig } from '@/features/modes/modeStore'
 import { formatDuration } from '@/features/sessions/sessionMachine'
+import { useSessionHistoryStore } from '@/features/sessions/sessionHistoryStore'
+import {
+  formatFocusClock,
+  selectSessionStats,
+  selectTodayFocus,
+} from '@/features/sessions/todayFocus'
+import { CampusDashboardCard } from '@/components/campus/CampusDashboardCard'
+import { computeStreak } from '@/features/progression/streak'
+import { kstDateKey } from '@/lib/time/kst'
 
 /** S-01 랜딩·대시보드 — docs/05_SCREEN_SPEC.md */
 export function LandingDashboard() {
   const navigate = useNavigate()
   const { nickname, hasOnboarded, hasCalibration } = useUserStore()
+  const modeConfig = useActiveModeConfig()
   const stage = useCharacterStage()
-  const { xp, points, attendance, completedSessions } = useProgressionStore()
+  const { xp, points, attendance } = useProgressionStore()
   const { combo, bestCombo } = useGameStore()
   const snapshot = usePostureStore((s) => s.snapshot)
   const { lengthId, configure, status } = useSessionStore()
   const isMonitoring = status === 'running'
   const { push } = useToast()
+
+  // 세션 요약 저장(finalizeSession) 직후 zustand 구독으로 즉시 갱신됩니다.
+  const summaries = useSessionHistoryStore((s) => s.summaries)
+  const todayFocus = useMemo(() => selectTodayFocus(summaries), [summaries])
+  // 홈·기록·성장이 공유하는 단일 집계 — 값 불일치를 원천 차단합니다.
+  const stats = useMemo(() => selectSessionStats(summaries), [summaries])
+  const streak = useMemo(() => computeStreak(attendance, kstDateKey()), [attendance])
+  const totalFocusMs = stats.totalFocusedMs
 
   const isFirstVisit = !hasOnboarded
 
@@ -50,14 +70,27 @@ export function LandingDashboard() {
     <AppShell
       rail={
         <>
-          <AttendanceCalendar attendance={attendance} />
+          <div>
+            <AttendanceCalendar attendance={attendance} />
+            <p className="mt-1.5 px-1 text-xs text-ink-soft">
+              {`연속 출석 ${streak.current}일 · 최고 ${streak.best}일`}
+              {streak.next && ` · 다음 보너스(+${streak.next.points}P)까지 ${streak.next.remaining}일`}
+            </p>
+          </div>
+
+          {/* 캠퍼스 카드 — 플래그가 꺼져 있으면 렌더되지 않습니다. */}
+          <CampusDashboardCard />
 
           <Card tone="yellow" className="p-4">
             <div className="mb-3 flex items-center justify-between">
               <CardTitle>오늘의 기록</CardTitle>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <StatTile label="집중" value="0:00" tone="surface" />
+              <StatTile
+                label="집중"
+                value={formatFocusClock(todayFocus.focusedMs)}
+                tone="surface"
+              />
               <StatTile label="콤보" value={String(combo)} unit="회" tone="surface" />
               <StatTile label="포인트" value={String(points)} unit="P" tone="surface" />
             </div>
@@ -83,6 +116,48 @@ export function LandingDashboard() {
             >
               {featureFlags.friendRoom ? '친구 방 만들기' : FRIEND_ROOM.ctaLabel}
             </Button>
+          </Card>
+
+          <Card className="p-4">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle>현재 모드</CardTitle>
+              <Button size="sm" variant="secondary" onClick={() => navigate(ROUTES.profiles)}>
+                모드 변경
+              </Button>
+            </div>
+            <p className="mt-2 text-sm font-bold text-ink">
+              {`${modeConfig.emoji} ${modeConfig.name}`}
+            </p>
+            <p className="mt-0.5 text-xs text-ink-soft">
+              {`괴물 · ${MONSTER_THEMES[modeConfig.monsterTheme].name}`}
+            </p>
+          </Card>
+
+          <Card className="p-4">
+            <CardTitle>최근 세션</CardTitle>
+            {stats.recentSessions.length === 0 ? (
+              <p className="mt-2 text-xs text-ink-soft">아직 세션 기록이 없어요.</p>
+            ) : (
+              <ul className="mt-2 flex flex-col gap-1.5">
+                {stats.recentSessions.map((s) => (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(ROUTES.result(s.sessionId ?? s.id))}
+                      className="w-full rounded-xl bg-canvas px-3 py-2 text-left text-xs hover:bg-line/40"
+                    >
+                      <span className="font-bold text-ink">{s.subject || '집중 세션'}</span>
+                      <span className="ml-1.5 text-ink-soft">
+                        {s.status === 'completed' ? '완료' : '중도 종료'}
+                        {' · '}
+                        {formatDuration(s.elapsedMs)}
+                        {` · 회복 ${s.recoveries}회`}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
 
           <Card className="p-4">
@@ -243,7 +318,7 @@ export function LandingDashboard() {
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold text-ink">최근 세션</h2>
         </div>
-        {completedSessions === 0 ? (
+        {stats.completedCount === 0 && summaries.length === 0 ? (
           <EmptyState
             title="아직 기록이 없어요"
             description="첫 세션을 마치면 여기에 회복 콤보와 감지 가능 시간이 쌓여요."
@@ -256,7 +331,7 @@ export function LandingDashboard() {
         ) : (
           <Card className="p-4">
             <p className="text-sm text-ink-soft">
-              {`완료한 세션 ${completedSessions}회 · 누적 ${formatDuration(completedSessions * 1500000)}`}
+              {`완료한 세션 ${stats.completedCount}회 · 누적 집중 ${formatDuration(totalFocusMs)}`}
             </p>
           </Card>
         )}

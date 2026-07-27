@@ -16,8 +16,29 @@ import { featureFlags } from '@/lib/feature-flags/flags'
 import { useUserStore } from '@/features/onboarding/userStore'
 import { useCalibrationStore } from '@/features/calibration/calibrationStore'
 import { resetAllData } from '@/features/settings/dataReset'
+import { sanitizeReactionText } from '@/features/rooms/roomEvents'
 import { useToast } from '@/app/providers/ToastProvider'
+import { SchoolPicker } from '@/components/campus/SchoolPicker'
+import { useCampusThemeStore } from '@/features/campus/campusThemeStore'
+import { CAMPUS_COPY } from '@/constants/campus'
 import type { Sensitivity } from '@/constants/posture'
+
+/** 서버 membership 동기화 결과 안내 — 표시 후 자동으로 비웁니다. */
+function CampusSyncNotice() {
+  const notice = useCampusThemeStore((s) => s.syncNotice)
+  const clear = useCampusThemeStore((s) => s.clearSyncNotice)
+  if (!notice) return null
+  return (
+    <output
+      className="mt-2 rounded-xl bg-canvas px-3 py-2 text-xs font-semibold text-ink"
+    >
+      {notice}
+      <button type="button" className="ml-2 underline" onClick={clear}>
+        닫기
+      </button>
+    </output>
+  )
+}
 
 /** S-16 설정 — 실제 동작하는 설정 화면 */
 export function Settings() {
@@ -28,6 +49,10 @@ export function Settings() {
   const soundEnabled = useUserStore((s) => s.soundEnabled)
   const toggleSound = useUserStore((s) => s.toggleSound)
   const pipAutoOpen = useUserStore((s) => s.pipAutoOpen)
+  const customReactions = useUserStore((s) => s.customReactions)
+  const setCustomReactions = useUserStore((s) => s.setCustomReactions)
+  const reactionSoundEnabled = useUserStore((s) => s.reactionSoundEnabled)
+  const toggleReactionSound = useUserStore((s) => s.toggleReactionSound)
   const togglePipAutoOpen = useUserStore((s) => s.togglePipAutoOpen)
   const sensitivity = useCalibrationStore((s) => s.sensitivity)
   const setSensitivity = useCalibrationStore((s) => s.setSensitivity)
@@ -58,9 +83,10 @@ export function Settings() {
       <PageHeader
         title="설정"
         description="감지 민감도, 소리, 카메라, 개인 자세 기준과 데이터를 관리해요."
+        back={ROUTES.home}
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* 닉네임 */}
         <Card>
           <CardTitle>닉네임</CardTitle>
@@ -85,6 +111,30 @@ export function Settings() {
             </Button>
           </div>
         </Card>
+
+        {/*
+          학교 선택 — 캠퍼스 테마/영토전 플래그가 켜질 때만 나타납니다.
+          대학 인증이 없으므로 비공식 테마라는 사실을 카드 안에 그대로 적습니다.
+        */}
+        {featureFlags.campusSchoolPicker && (
+          <Card className="lg:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle>학교 선택 (캠퍼스 테마)</CardTitle>
+              <Badge tone="muted">비공식</Badge>
+            </div>
+            <p className="mt-1 text-xs text-ink-soft">
+              {`${CAMPUS_COPY.unofficialGame} ${CAMPUS_COPY.privacy}`}
+            </p>
+            <CampusSyncNotice />
+            <div className="mt-4">
+              <SchoolPicker
+                onChanged={() =>
+                  push({ title: '캠퍼스 테마를 바꿨어요.', tone: 'success' })
+                }
+              />
+            </div>
+          </Card>
+        )}
 
         {/* 감지 민감도 */}
         <Card>
@@ -201,6 +251,65 @@ export function Settings() {
               {profile ? '다시 등록' : '기준 등록'}
             </Button>
           </div>
+        </Card>
+
+        {/* 내 응원 문구 — 친구 방에서 쓸 짧은 문구 (자유 채팅 아님) */}
+        <Card>
+          <CardTitle>내 응원 문구</CardTitle>
+          <p className="mt-1 text-xs text-ink-soft">
+            친구 방에서 보낼 나만의 응원이에요. 최대 3개, 문구당 2~16자.
+            자유 채팅은 지원하지 않아요.
+          </p>
+          <div className="mt-3 flex flex-col gap-2">
+            {[0, 1, 2].map((i) => (
+              <input
+                key={i}
+                maxLength={16}
+                placeholder={`응원 문구 ${i + 1}`}
+                value={customReactions[i] ?? ''}
+                onChange={(e) => {
+                  const next = [...customReactions]
+                  next[i] = e.target.value
+                  setCustomReactions(next)
+                }}
+                onBlur={() => {
+                  const clean = customReactions
+                    .map((t) => sanitizeReactionText(t ?? ''))
+                    .filter((t) => t.length >= 2)
+                  setCustomReactions(clean)
+                }}
+                className="h-9 rounded-xl border border-line bg-surface px-2 text-sm"
+              />
+            ))}
+          </div>
+          <div className="mt-3 flex items-center justify-between">
+            <p className="text-sm text-ink-soft">친구 반응 수신 소리</p>
+            <Button
+              variant={reactionSoundEnabled ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={toggleReactionSound}
+              aria-pressed={reactionSoundEnabled}
+            >
+              {reactionSoundEnabled ? '켜짐' : '꺼짐'}
+            </Button>
+          </div>
+        </Card>
+
+        {/* 모드 관리 */}
+        <Card>
+          <CardTitle>모드 관리</CardTitle>
+          <p className="mt-1 text-xs text-ink-soft">
+            도서관·내 공간·팀플과 내 모드(최대 3개)를 여기에서 관리해요. 모드를
+            바꿔도 XP·기록은 유지돼요.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="mt-3"
+            onClick={() => navigate(ROUTES.profiles)}
+          >
+            모드 관리 열기
+          </Button>
         </Card>
 
         {/* 데이터 초기화 */}

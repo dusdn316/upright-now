@@ -28,6 +28,10 @@ interface GameStoreState {
   recoverySucceeded: (eventId: string, now?: number) => { applied: number }
   recoveryMissed: () => void
   sessionCompleted: (eventId: string) => void
+  /** 유효 감지 집중 5분마다 — 시각 연출 포함, XP 없음 */
+  focusAttack: (eventId: string) => void
+  /** 개인 괴물 장기 진행도 동기화용 — 세션 시작 시 저장된 HP 를 주입 */
+  setBoss: (hp: number, maxHp: number) => void
   addSessionEarnings: (xp: number, points: number) => void
   reset: () => void
 }
@@ -106,6 +110,19 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       sessionXp: s.sessionXp + Math.max(0, xp),
       sessionPoints: s.sessionPoints + Math.max(0, points),
     })),
+
+  focusAttack: (eventId) =>
+    set((prev) => {
+      const { state: boss, applied } = applyDamage(prev.boss, {
+        eventId,
+        amount: DAMAGE.focus,
+      })
+      if (applied === 0) return prev
+      return { boss, attackTick: prev.attackTick + 1 }
+    }),
+
+  setBoss: (hp, maxHp) =>
+    set((prev) => ({ boss: { ...prev.boss, hp, maxHp } })),
 
   reset: () => set({ ...initialState, boss: createBossState(BOSS_MAX_HP) }),
 }))

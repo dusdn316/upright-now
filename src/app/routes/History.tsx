@@ -1,8 +1,10 @@
 import { AppShell, PageHeader } from '@/components/layout/AppShell'
 import { AttendanceCalendar } from '@/components/dashboard/AttendanceCalendar'
 import { Card, CardTitle, EmptyState, StatTile } from '@/components/ui'
+import { ROUTES } from '@/constants/routes'
 import { formatDuration } from '@/features/sessions/sessionMachine'
 import { useSessionHistoryStore } from '@/features/sessions/sessionHistoryStore'
+import { dedupeBySessionId, selectSessionStats } from '@/features/sessions/todayFocus'
 import { useProgressionStore } from '@/features/progression/progressionStore'
 
 /** S-13 기록 — 저장된 세션 목록과 주간 출석 (docs/05) */
@@ -11,9 +13,10 @@ export function History() {
   const attendance = useProgressionStore((s) => s.attendance)
   const completed = useProgressionStore((s) => s.completedSessions)
 
-  const totalMs = summaries.reduce((sum, s) => sum + s.elapsedMs, 0)
-  const detectableMs = summaries.reduce((sum, s) => sum + s.detectableMs, 0)
-  const recoveries = summaries.reduce((sum, s) => sum + s.recoveries, 0)
+  const stats = selectSessionStats(summaries)
+  const totalMs = stats.totalFocusedMs
+  const detectableMs = stats.detectableMs
+  const recoveries = stats.recoveries
 
   return (
     <AppShell
@@ -22,6 +25,7 @@ export function History() {
       <PageHeader
         title="기록"
         description="완료한 세션과 주간 출석을 확인해요. 자세 점수가 아니라 회복·감지 가능 시간을 보여줘요."
+        back={ROUTES.home}
       />
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -42,7 +46,7 @@ export function History() {
           </div>
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
-            {summaries.map((s) => (
+            {dedupeBySessionId(summaries).map((s) => (
               <li
                 key={s.id}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line bg-surface px-4 py-3"
@@ -50,12 +54,27 @@ export function History() {
                 <div>
                   <p className="text-sm font-bold text-ink">
                     {s.subject || '집중 세션'}
-                    {s.status === 'aborted' && (
+                    {s.isTest ? (
+                      <span className="ml-2 text-xs font-normal text-ink-soft">
+                        1분 점검 (집계 제외)
+                      </span>
+                    ) : s.status === 'aborted' ? (
                       <span className="ml-2 text-xs font-normal text-ink-soft">
                         중도 종료
                       </span>
-                    )}
+                    ) : null}
                   </p>
+                  {(s.goal || s.targetProgressLabel || s.nextAction) && (
+                    <p className="text-xs text-ink-soft">
+                      {[
+                        s.goal ? `목표: ${s.goal}` : null,
+                        s.targetProgressLabel ? `진행도: ${s.targetProgressLabel}` : null,
+                        s.nextAction ? `다음 할 일: ${s.nextAction}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  )}
                   <p className="text-xs text-ink-soft">
                     {new Date(s.startedAt).toLocaleString('ko-KR', {
                       month: 'long',

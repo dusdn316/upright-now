@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AppShell } from '@/components/layout/AppShell'
+import { AppShell, BackButton } from '@/components/layout/AppShell'
 import { CharacterViewport } from '@/components/character/CharacterViewport'
 import { Button, Card, TextField } from '@/components/ui'
 import { DEFAULT_NICKNAME } from '@/constants/copy'
@@ -16,6 +16,9 @@ export function OnboardingName() {
   return (
     <AppShell chrome="focus">
       <div className="mx-auto flex max-w-xl flex-col items-center gap-6 py-10">
+        <div className="w-full">
+          <BackButton fallback={ROUTES.home} />
+        </div>
         <CharacterViewport stage={1} size={160} />
 
         <Card className="w-full">

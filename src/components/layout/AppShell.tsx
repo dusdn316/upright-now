@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { SidebarNavigation } from './SidebarNavigation'
 
 /**
@@ -42,25 +43,75 @@ export function AppShell({
   )
 }
 
+/**
+ * 앱 내부 뒤로가기 버튼.
+ * - 히스토리가 있으면 한 단계 뒤로, 없으면(새 탭·직접 진입) fallback 으로.
+ * - onClick 을 주면 화면이 직접 처리합니다 (예: 세션 이탈 확인 모달).
+ */
+export function BackButton({
+  fallback = '/',
+  onClick,
+}: {
+  fallback?: string
+  onClick?: () => void
+}) {
+  const navigate = useNavigate()
+
+  const handleBack = () => {
+    if (onClick) {
+      onClick()
+      return
+    }
+    // react-router 는 history.state.idx 로 스택 위치를 추적합니다.
+    const idx = window.history.state?.idx
+    if (typeof idx === 'number' && idx > 0) navigate(-1)
+    else navigate(fallback)
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleBack}
+      className="mb-3 inline-flex items-center gap-1.5 rounded-xl px-2 py-1 -ml-2 text-sm font-semibold text-ink-soft transition hover:bg-surface hover:text-ink"
+      aria-label="이전 화면으로"
+    >
+      <span aria-hidden="true">←</span>
+      이전
+    </button>
+  )
+}
+
 /** 화면 상단 제목 블록 */
 export function PageHeader({
   title,
   description,
   action,
+  back,
 }: {
   title: string
   description?: string
   action?: ReactNode
+  /** 뒤로가기 — 문자열이면 히스토리 없을 때의 fallback 경로, 함수면 직접 처리 */
+  back?: string | (() => void)
 }) {
+  // flex-wrap: 좁은 폭에서 action 이 제목 아래로 내려가 가로 넘침을 막습니다.
   return (
-    <header className="mb-6 flex items-start justify-between gap-4">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-ink">{title}</h1>
-        {description && (
-          <p className="mt-1.5 text-[15px] text-ink-soft">{description}</p>
-        )}
+    <header className="mb-6">
+      {back !== undefined &&
+        (typeof back === 'string' ? (
+          <BackButton fallback={back} />
+        ) : (
+          <BackButton onClick={back} />
+        ))}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-bold tracking-tight text-ink">{title}</h1>
+          {description && (
+            <p className="mt-1.5 text-[15px] text-ink-soft">{description}</p>
+          )}
+        </div>
+        {action}
       </div>
-      {action}
     </header>
   )
 }

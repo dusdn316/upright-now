@@ -342,3 +342,7 @@ end;
 $$;
 
 grant execute on function public.apply_room_shield(uuid, uuid, integer) to authenticated;
+
+-- V1.2: 사용자 지정 세션 길이(180~7200초)는 별도 마이그레이션으로 적용합니다.
+-- 라이브 DB 적용: supabase/migrations/20260726_expand_room_duration.sql 전체를
+-- Supabase SQL Editor 에 붙여넣어 실행 (멱등 — 여러 번 실행해도 안전).

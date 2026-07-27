@@ -25,7 +25,7 @@ export const LEARNING_PROFILES: LearningProfile[] = [
   {
     id: 'team',
     name: '팀플',
-    description: '친구와 공동 보스를 공략하고 함께 리셋해요.',
+    description: '친구와 공동 보스를 공략하고 함께 회복 휴식해요.',
     sound: '선택적 사운드',
     ambient: '공동 보스 연출',
     stretchKind: '같이 하기 쉬운 동작',

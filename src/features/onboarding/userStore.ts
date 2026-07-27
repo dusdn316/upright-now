@@ -13,12 +13,18 @@ interface UserStoreState {
   profileId: LearningProfileKind
   hasCalibration: boolean
   soundEnabled: boolean
+  /** 반응 수신 소리 — 전역 소리와 별개로 끌 수 있음 */
+  reactionSoundEnabled: boolean
+  /** 내 응원 문구 (최대 3개, 2~16자) */
+  customReactions: string[]
   /** 세션 시작 시 PiP 미니 위젯 자동 열기 */
   pipAutoOpen: boolean
   setNickname: (value: string) => void
   setProfile: (id: LearningProfileKind) => void
   setCalibrated: (value: boolean) => void
   toggleSound: () => void
+  toggleReactionSound: () => void
+  setCustomReactions: (list: string[]) => void
   togglePipAutoOpen: () => void
   reset: () => void
 }
@@ -43,6 +49,8 @@ const initialState = {
   profileId: DEFAULT_PROFILE_ID as LearningProfileKind,
   hasCalibration: false,
   soundEnabled: false,
+  reactionSoundEnabled: true,
+  customReactions: [] as string[],
   pipAutoOpen: false,
 }
 
@@ -51,6 +59,10 @@ const persisted = loadLocal(STORAGE_KEYS.user, initialState)
 export const useUserStore = create<UserStoreState>((set) => ({
   ...initialState,
   ...persisted,
+  // 구버전 저장분에는 없는 신규 필드 — undefined 덮어쓰기 방지
+  customReactions: (persisted as { customReactions?: string[] }).customReactions ?? [],
+  reactionSoundEnabled:
+    (persisted as { reactionSoundEnabled?: boolean }).reactionSoundEnabled ?? true,
 
   setNickname: (value) =>
     set({ nickname: normalizeNickname(value), hasOnboarded: true }),
@@ -60,6 +72,10 @@ export const useUserStore = create<UserStoreState>((set) => ({
   setCalibrated: (value) => set({ hasCalibration: value }),
 
   toggleSound: () => set((s) => ({ soundEnabled: !s.soundEnabled })),
+  toggleReactionSound: () =>
+    set((s) => ({ reactionSoundEnabled: !s.reactionSoundEnabled })),
+  setCustomReactions: (list: string[]) =>
+    set({ customReactions: list.slice(0, 3) }),
 
   togglePipAutoOpen: () =>
     set((s) => ({ pipAutoOpen: !s.pipAutoOpen })),

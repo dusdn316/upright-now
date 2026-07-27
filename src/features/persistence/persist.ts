@@ -24,6 +24,8 @@ export function installPersistence(): () => void {
         hasCalibration: s.hasCalibration,
         soundEnabled: s.soundEnabled,
         pipAutoOpen: s.pipAutoOpen,
+        reactionSoundEnabled: s.reactionSoundEnabled,
+        customReactions: s.customReactions,
       }),
     ),
   )
@@ -39,6 +41,8 @@ export function installPersistence(): () => void {
         equipped: s.equipped,
         shopUnlocked: s.shopUnlocked,
         recentXp: s.recentXp,
+        streakClaims: s.streakClaims,
+        badges: s.badges,
       }),
     ),
   )
@@ -46,7 +50,8 @@ export function installPersistence(): () => void {
   const unsubCal = useCalibrationStore.subscribe((s) =>
     guard(() =>
       saveLocal(STORAGE_KEYS.calibration, {
-        profile: s.profile,
+        profiles: s.profiles,
+        activeProfileId: s.activeProfileId,
         sensitivity: s.sensitivity,
       }),
     ),

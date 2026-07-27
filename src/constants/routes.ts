@@ -16,6 +16,10 @@ export const ROUTES = {
   room: (code = 'demo') => `/room/${code}`,
   settings: '/settings',
   lab: '/lab',
+  /** 캠퍼스 — VITE_ENABLE_CAMPUS_TERRITORY 가 켜질 때만 등록됩니다. */
+  campus: '/campus',
+  campusMap: '/campus/map',
+  campusHistory: '/campus/history',
 } as const
 
 export interface NavItem {
@@ -35,3 +39,10 @@ export const SIDEBAR_ITEMS: NavItem[] = [
   { to: ROUTES.stretch(), label: '스트레칭', icon: 'stretch' },
   { to: ROUTES.settings, label: '설정', icon: 'settings' },
 ]
+
+/** 캠퍼스 메뉴 — 플래그가 꺼져 있으면 사이드바에 넣지 않습니다. */
+export const CAMPUS_NAV_ITEM: NavItem = {
+  to: ROUTES.campus,
+  label: '캠퍼스',
+  icon: 'growth',
+}
