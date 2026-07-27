@@ -170,3 +170,29 @@ Production 환경변수는 변경하지 않았고, campus SQL 은 어떤 DB 에�
   커스텀 학교 명시 결과(created/updated/name_conflict/ownership_conflict/
   invalid). room presence SQL 은 멤버십 가드 구조 유지 확인.
 - 라이브 검증은 PHASE B — 사용자가 SQL 2건 실행 후 "SQL 2개 실행 완료. 계속."
+
+## 2026-07-27 후속 3 — SQL 실행 전 마지막 P1 (RC3.1)
+
+- 기타 학교 명시 저장: 라디오 선택은 입력 폼만 열고 서버를 호출하지 않음.
+  [학교 정보 저장하고 선택] 버튼(이름 2~30자·짧은 이름 2~8자·HEX 색이
+  모두 유효할 때만 활성)이 upsert_custom_school → select_campus_school 을
+  수행하고, 서버 성공 후에만 로컬 선택을 확정. 실패(change_limit /
+  change_cooldown / ownership_conflict / name_conflict / not_ready) 시
+  이전 학교로 원복 + 사유별 안내. "직접 설정 학교" 임시 이름 자동 등록 제거.
+  로컬 저장은 schoolId(프리셋 id 또는 `custom-<hash>` stable key)와
+  customSchoolName/ShortName/Color 를 분리 보관, 구버전 schoolId='custom'
+  저장분은 이름 기반 stable key 로 무손실 migration.
+- 공유 커스텀 학교: 같은 이름은 소유자가 달라도 `existing` 으로 참여 허용,
+  타인 학교의 표시정보 변경 시도는 `ownership_conflict` 로 거부.
+- 스트레칭 서버 dedup: session_once unique index 에 stretch_completed 포함
+  — 같은 stretchSessionId 는 eventId 를 바꿔도 1회만 적립.
+- 동시성: apply_campus_contribution 이 per-user advisory lock 을 잡은 뒤
+  일일 600점·회복 5회/20초·중복을 재검사 (동시 요청 한도 우회 차단).
+- 학교 변경 7일 쿨다운을 select_campus_school 이 서버에서 강제
+  (change_cooldown + next_allowed_at, 새 시즌 시작 시 리셋).
+- **알려진 한계 — 버려진 방 즉시 정리 불가**: 두 참가자가 모두 브라우저를
+  닫으면 heartbeat/cleanup 호출 주체가 없어 방이 waiting/running 상태로
+  남는다. 서버 스케줄러(pg_cron 등) 없이는 즉시 정리가 불가능하므로,
+  `cleanup_abandoned_rooms()` RPC(모든 멤버가 45초+ 무응답인 방만 closed,
+  1회 10건 제한)를 다음 사용자의 방 생성/입장 시점에 best-effort 로 호출해
+  지연 정리한다. 활성 멤버가 한 명이라도 있는 방은 닫히지 않는다.

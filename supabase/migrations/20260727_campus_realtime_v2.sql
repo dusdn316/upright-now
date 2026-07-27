@@ -1,5 +1,5 @@
 -- ============================================================================
--- 20260727_campus_realtime_v2.sql (v2.2 — 원장 보호·서버 점수·시즌 자동 전환)
+-- 20260727_campus_realtime_v2.sql (v2.3 — 공유 커스텀 학교·동시성 잠금·7일 쿨다운)
 -- 캠퍼스 영토전 실시간 — 불규칙 36 territory 모델이 유일한 기준입니다.
 --
 -- Production 에 직접 실행하지 마세요. 멱등 / friend-room 무변경 /
@@ -115,9 +115,12 @@ create index if not exists campus_contributions_school_idx
   on public.campus_contributions (season_id, school_id);
 create index if not exists campus_contributions_member_day_idx
   on public.campus_contributions (member_hash, created_at);
+-- 완료류 + 스트레칭 모두 (시즌·멤버·kind·sessionId) 1회 — eventId 를 바꿔도 차단
+drop index if exists campus_contributions_session_once;
 create unique index if not exists campus_contributions_session_once
   on public.campus_contributions (season_id, member_hash, kind, session_id)
-  where session_id is not null and kind in ('session_completed','friend_session_completed');
+  where session_id is not null
+    and kind in ('session_completed','friend_session_completed','stretch_completed');
 
 alter table public.campus_contributions enable row level security;
 drop policy if exists campus_contributions_select on public.campus_contributions;
@@ -254,6 +257,14 @@ begin
     return jsonb_build_object('result', 'change_limit');
   end if;
 
+  -- 마지막 선택·변경 후 7일 이내에는 변경 불가 (화면 안내와 동일 규칙)
+  if v_row.last_changed_at > now() - interval '7 days' then
+    return jsonb_build_object(
+      'result', 'change_cooldown',
+      'next_allowed_at', v_row.last_changed_at + interval '7 days'
+    );
+  end if;
+
   update public.campus_memberships
      set school_id = p_school_id,
          changes_in_season = v_row.changes_in_season + 1,
@@ -298,6 +309,11 @@ begin
   end if;
 
   if v_row.created_by is distinct from auth.uid() then
+    -- 같은 학교(같은 stable key + 같은 표시 이름)에 다른 사용자가 참여하는 것은
+    -- 허용합니다. 표시 정보를 바꾸려는 시도만 소유권 충돌로 거부합니다.
+    if lower(v_row.display_name) = lower(v_name) then
+      return jsonb_build_object('result', 'existing');
+    end if;
     return jsonb_build_object('result', 'ownership_conflict');
   end if;
 
@@ -353,6 +369,10 @@ begin
   end if;
 
   v_member_hash := md5(auth.uid()::text || ':' || v_season);
+
+  -- 동일 사용자의 동시 요청 직렬화 — 상한·간격 검사를 잠금 뒤에 수행해
+  -- 서로 다른 eventId 동시 전송으로 600점·5회·20초 제한을 우회할 수 없습니다.
+  perform pg_advisory_xact_lock(hashtext(auth.uid()::text || ':' || v_season));
 
   -- KST 하루 최대 600점
   select coalesce(sum(points), 0) into v_today_points

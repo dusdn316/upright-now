@@ -282,6 +282,8 @@ export async function rejoinFromStorage(code: string): Promise<boolean> {
     const saved = JSON.parse(raw) as { roomId: string; code: string; myId: string; isHost: boolean }
     if (saved.code !== code.toUpperCase() || !saved.roomId) return false
     const userId = await ensureAnonymousUser()
+    // 모두 떠난 버려진 방을 이 시점에 제한적으로 정리합니다.
+    void sweepAbandonedRooms()
     if (!userId || userId !== saved.myId) return false
     giraffe = createGiraffeSync()
     store().patch({ phase: 'connecting', roomId: saved.roomId, code: saved.code, myId: userId, isHost: saved.isHost })
@@ -294,6 +296,15 @@ export async function rejoinFromStorage(code: string): Promise<boolean> {
 
 /* -------------------------------- 공개 API ------------------------------- */
 
+async function sweepAbandonedRooms(): Promise<void> {
+  try {
+    const supabase = await getSupabase()
+    if (supabase) await supabase.rpc('cleanup_abandoned_rooms')
+  } catch {
+    /* 마이그레이션 전 — 무시 */
+  }
+}
+
 export async function createRoom(input: {
   roomName: string
   subject: string
@@ -304,6 +315,8 @@ export async function createRoom(input: {
   s.patch({ phase: 'connecting', errorMessage: null })
 
   const userId = await ensureAnonymousUser()
+  // 모두 떠난 버려진 방을 이 시점에 제한적으로 정리합니다.
+  void sweepAbandonedRooms()
   const supabase = await getSupabase()
   if (!userId || !supabase) {
     s.patch({ phase: 'error', errorMessage: '연결을 준비하지 못했어요. 잠시 후 다시 시도해 주세요.' })
@@ -348,6 +361,8 @@ export async function joinRoom(
   s.patch({ phase: 'connecting', errorMessage: null })
 
   const userId = await ensureAnonymousUser()
+  // 모두 떠난 버려진 방을 이 시점에 제한적으로 정리합니다.
+  void sweepAbandonedRooms()
   const supabase = await getSupabase()
   if (!userId || !supabase) {
     s.patch({ phase: 'error', errorMessage: '연결을 준비하지 못했어요. 잠시 후 다시 시도해 주세요.' })

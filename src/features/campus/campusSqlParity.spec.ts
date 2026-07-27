@@ -4,6 +4,7 @@ import manifest from './territorySeedManifest.json'
 import campusSql from '../../../supabase/migrations/20260727_campus_realtime_v2.sql?raw'
 import roomSql from '../../../supabase/migrations/20260727_room_presence_cleanup.sql?raw'
 import repoSrc from './supabaseRepository.ts?raw'
+import roomServiceSrc from '../rooms/roomService.ts?raw'
 
 /**
  * SQL 마이그레이션 ↔ 클라이언트 단일 기준 검증.
@@ -192,5 +193,49 @@ describe('campus v2.2 — 원장 보호·서버 점수·시즌 자동 전환', (
     for (const r of ['created', 'updated', 'name_conflict', 'ownership_conflict', 'invalid']) {
       expect(campusSql).toContain("'" + r + "'")
     }
+  })
+})
+
+describe('campus v2.3 — 공유 학교·쿨다운·동시성·dedup', () => {
+  it('같은 이름의 타인 학교는 existing 으로 참여를 허용한다', () => {
+    expect(campusSql).toContain("'existing'")
+    // 클라이언트도 existing 을 성공으로 처리한다
+    expect(repoSrc).toContain("'existing'")
+  })
+
+  it('학교 변경 7일 쿨다운을 서버가 검증한다', () => {
+    expect(campusSql).toContain("'change_cooldown'")
+    expect(campusSql).toContain('next_allowed_at')
+    expect(campusSql).toContain("interval '7 days'")
+  })
+
+  it('기여 적용은 사용자 단위 advisory lock 으로 직렬화된다', () => {
+    // 시즌 전환 락 + 사용자 단위 락 = 최소 2회
+    const locks = campusSql.match(/pg_advisory_xact_lock/g)
+    expect(locks?.length ?? 0).toBeGreaterThanOrEqual(2)
+    expect(campusSql).toContain("hashtext(auth.uid()::text || ':' || v_season)")
+  })
+
+  it('스트레칭 중복은 서버 unique index 로 차단된다 (eventId 를 바꿔도 1회)', () => {
+    const start = campusSql.indexOf('create unique index if not exists campus_contributions_session_once')
+    const idx = campusSql.slice(start, campusSql.indexOf(';', start))
+    expect(idx).toContain('session_id is not null')
+    expect(idx).toContain("'stretch_completed'")
+  })
+})
+
+describe('room presence v2.1 — 버려진 방 정리', () => {
+  it('cleanup_abandoned_rooms 가 정의돼 있고 조건이 안전하다', () => {
+    expect(roomSql).toContain('create or replace function public.cleanup_abandoned_rooms')
+    // waiting/running + ended_at 없음 + "모든" 멤버 45초 이상 무응답일 때만
+    expect(roomSql).toContain("r.status in ('waiting', 'running')")
+    expect(roomSql).toContain('r.ended_at is null')
+    expect(roomSql).toContain("m.last_seen_at >= now() - interval '45 seconds'")
+    expect(roomSql).toContain('limit 10')
+  })
+
+  it('클라이언트는 방 생성·입장 시 best-effort 로 호출한다', () => {
+    expect(roomServiceSrc).toContain("rpc('cleanup_abandoned_rooms')")
+    expect(roomServiceSrc).toContain('sweepAbandonedRooms')
   })
 })

@@ -42,6 +42,13 @@ export function SchoolPicker({
 
   const [message, setMessage] = useState<string | null>(null)
   const [colorDraft, setColorDraft] = useState(customColor)
+  const [customFormOpen, setCustomFormOpen] = useState(false)
+  const saveCustomSchool = useCampusThemeStore((s) => s.saveCustomSchool)
+  const syncStatus = useCampusThemeStore((s) => s.syncStatus)
+  const canSaveCustom =
+    customSchoolName.trim().length >= 2 &&
+    customSchoolShortName.trim().length >= 2 &&
+    /^#[0-9a-fA-F]{6}$/.test(customColor)
 
   const now = Date.now()
   const season = useMemo(() => seasonAt(now), [now])
@@ -56,7 +63,17 @@ export function SchoolPicker({
   const nextAllowed = formatNextAllowed(probe.nextAllowedAt)
   const currentTheme = resolveCampusTheme(schoolId, customColor)
 
+  const isCustomSelected =
+    customFormOpen || Boolean(schoolId?.startsWith('custom'))
+
   const pick = (nextId: string) => {
+    // 기타 / 직접 설정: 서버 호출 없이 입력 폼만 엽니다.
+    if (nextId === CUSTOM_SCHOOL_ID) {
+      setCustomFormOpen(true)
+      setMessage(null)
+      return
+    }
+    setCustomFormOpen(false)
     if (nextId === schoolId) return
     const decision = selectSchool(nextId, Date.now())
     if (!decision.allowed) {
@@ -86,7 +103,8 @@ export function SchoolPicker({
         <div className="grid grid-cols-1 gap-2 @[560px]:grid-cols-2">
           {CAMPUS_SCHOOLS.map((preset) => {
             const theme = resolveCampusTheme(preset.id, customColor)
-            const selected = preset.id === schoolId
+            // 커스텀 학교는 stable key(custom-xxxx)로 저장되므로 prefix 로 판정합니다.
+            const selected = preset.custom ? isCustomSelected : preset.id === schoolId
             const disabled = locked && !selected
             return (
               <label
@@ -139,7 +157,7 @@ export function SchoolPicker({
       </fieldset>
 
       {/* 기타 / 직접 설정 — 학교 이름 직접 입력 (비공식) */}
-      {schoolId === 'custom' && (
+      {isCustomSelected && (
         <div className="mb-3 flex flex-wrap items-end gap-2 text-sm">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-semibold text-ink-soft">학교 이름 (2~30자)</span>
@@ -166,7 +184,7 @@ export function SchoolPicker({
       )}
 
       {/* 기타 / 직접 설정 — 색 직접 선택 */}
-      {schoolId === CUSTOM_SCHOOL_ID && (
+      {isCustomSelected && (
         <div className="rounded-2xl border border-line bg-canvas p-3">
           <p className="text-sm font-bold text-ink">내 색 고르기</p>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -219,6 +237,25 @@ export function SchoolPicker({
               적용
             </Button>
           </div>
+          {/* 명시 저장 — 이 버튼을 누르기 전에는 서버에 아무것도 만들지 않습니다. */}
+          <button
+            type="button"
+            data-testid="campus-save-custom-school"
+            disabled={!canSaveCustom || syncStatus === 'saving'}
+            onClick={() => {
+              const decision = saveCustomSchool(Date.now())
+              if (!decision.allowed) {
+                const reason = decision.reason ? SCHOOL_CHANGE_MESSAGE[decision.reason] : null
+                setMessage(reason ?? '학교 이름(2~30자)·짧은 이름(2~8자)·색을 확인해 주세요.')
+                return
+              }
+              setMessage(null)
+              onChanged?.(useCampusThemeStore.getState().schoolId ?? '')
+            }}
+            className="mt-3 h-10 w-full rounded-xl bg-pink text-sm font-bold text-white disabled:opacity-40"
+          >
+            {syncStatus === 'saving' ? '저장하는 중…' : '학교 정보 저장하고 선택'}
+          </button>
         </div>
       )}
 

@@ -136,3 +136,40 @@ grant execute on function public.complete_room_if_done(uuid) to authenticated;
 -- drop function if exists public.heartbeat_room_member(uuid);
 -- drop function if exists public.is_room_member(uuid);
 -- alter table public.room_members drop column if exists last_seen_at;
+
+-- 5) 버려진 방 정리 — 두 사용자가 모두 브라우저를 닫아 cleanup 호출자가
+--    없는 방을, 다음 사용자가 방을 만들거나 입장할 때 제한적으로 정리합니다.
+--    조건(모두 충족): waiting/running · ended_at 없음 · "모든" 멤버가
+--    45초 이상 무응답. 활성 방은 어떤 경우에도 닫히지 않습니다.
+create or replace function public.cleanup_abandoned_rooms()
+returns integer language plpgsql security definer set search_path = public as $$
+declare
+  v_closed integer := 0;
+begin
+  if auth.uid() is null then raise exception 'authentication required'; end if;
+
+  with abandoned as (
+    select r.id
+      from public.rooms r
+     where r.status in ('waiting', 'running')
+       and r.ended_at is null
+       and exists (select 1 from public.room_members m where m.room_id = r.id)
+       and not exists (
+         select 1 from public.room_members m
+          where m.room_id = r.id
+            and m.last_seen_at >= now() - interval '45 seconds'
+       )
+     limit 10
+  )
+  update public.rooms r
+     set status = 'closed', ended_at = now(), updated_at = now()
+    from abandoned a
+   where r.id = a.id;
+  get diagnostics v_closed = row_count;
+  return v_closed;
+end; $$;
+
+grant execute on function public.cleanup_abandoned_rooms() to authenticated;
+
+-- ROLLBACK 추가분:
+-- drop function if exists public.cleanup_abandoned_rooms();

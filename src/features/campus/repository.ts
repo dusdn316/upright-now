@@ -34,6 +34,9 @@ export interface CampusRepository {
    */
   selectSchool?(
     schoolId: string,
-  ): Promise<'selected' | 'changed' | 'unchanged' | 'change_limit' | 'not_ready'>
+  ): Promise<
+    | 'selected' | 'changed' | 'unchanged'
+    | 'change_limit' | 'change_cooldown' | 'not_ready'
+  >
   dispose(): void
 }

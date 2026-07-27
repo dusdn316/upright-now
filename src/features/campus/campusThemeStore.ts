@@ -35,7 +35,14 @@ interface CampusThemePersisted {
 interface CampusThemeState extends CampusThemePersisted {
   /** 서버 membership 동기화 결과 안내 (Settings 에서 표시 후 비움) */
   syncNotice: string | null
+  /** 서버 처리 상태 — 저장 버튼·안내 표시용 */
+  syncStatus: 'idle' | 'saving' | 'ok' | 'error'
   clearSyncNotice: () => void
+  /**
+   * 기타 학교 명시 저장 — 이름·짧은 이름·색이 모두 유효할 때만.
+   * 서버(upsert existing 포함 → select) 성공 후에 로컬 선택을 확정합니다.
+   */
+  saveCustomSchool: (now?: number) => SchoolChangeDecision
   /** 학교를 고르거나 바꿉니다. 제한에 걸리면 상태를 바꾸지 않습니다. */
   selectSchool: (schoolId: string, now?: number) => SchoolChangeDecision
   /** 기타 / 직접 설정의 색만 바꿉니다. 학교 변경 제한과 무관합니다. */
@@ -87,12 +94,100 @@ function historyOf(state: CampusThemePersisted): SchoolChangeHistory {
 
 export const useCampusThemeStore = create<CampusThemeState>((set, get) => ({
   syncNotice: null,
-  clearSyncNotice: () => set({ syncNotice: null }),
+  syncStatus: 'idle',
+  clearSyncNotice: () => set({ syncNotice: null, syncStatus: 'idle' }),
+
+  saveCustomSchool: (now = Date.now()) => {
+    const name = sanitizeSchoolName(get().customSchoolName, 30)
+    const shortName = sanitizeSchoolName(get().customSchoolShortName, 8)
+    const color = normalizeHexColor(get().customColor)
+    if (name.length < 2 || shortName.length < 2 || !color) {
+      set({
+        syncStatus: 'error',
+        syncNotice: '학교 이름(2~30자)·짧은 이름(2~8자)·색을 확인해 주세요.',
+      })
+      return { allowed: false, firstPick: false }
+    }
+    const stableKey = customSchoolStableKey(name)
+    // 같은 학교 재저장(짧은 이름·색 수정)은 "학교 변경"이 아니므로
+    // 변경 제한을 검사하지 않고 변경 이력도 소모하지 않습니다.
+    const isSameSchool = stableKey === get().schoolId
+    const decision: SchoolChangeDecision = isSameSchool
+      ? { allowed: true, firstPick: false }
+      : get().checkChange(stableKey, now)
+    if (!decision.allowed) return decision
+
+    const prev: CampusThemePersisted = {
+      schoolId: get().schoolId,
+      customColor: get().customColor,
+      customSchoolName: get().customSchoolName,
+      customSchoolShortName: get().customSchoolShortName,
+      lastChangedAt: get().lastChangedAt,
+      lastChangedSeasonId: get().lastChangedSeasonId,
+      changesInSeason: get().changesInSeason,
+      targetTileId: get().targetTileId,
+    }
+    const season = seasonAt(now)
+    const nextHistory = isSameSchool
+      ? historyOf(get())
+      : applySchoolChange(historyOf(get()), stableKey, season.id, now)
+    const next: CampusThemePersisted = {
+      ...prev,
+      schoolId: stableKey,
+      lastChangedAt: nextHistory.lastChangedAt,
+      lastChangedSeasonId: nextHistory.lastChangedSeasonId,
+      changesInSeason: nextHistory.changesInSeason,
+      // 학교가 실제로 바뀔 때만 목표 타일을 초기화합니다.
+      targetTileId: isSameSchool ? prev.targetTileId : null,
+    }
+    set({ ...next, syncStatus: 'saving', syncNotice: '학교 정보를 저장하는 중이에요…' })
+    persist(next)
+
+    void import('./campusStore').then(async (m) => {
+      const result = await m.syncSchoolSelection(stableKey)
+      if (
+        result === 'change_limit' ||
+        result === 'change_cooldown' ||
+        result === 'ownership_conflict' ||
+        result === 'name_conflict' ||
+        result === 'not_ready'
+      ) {
+        persist(prev)
+        set({
+          ...prev,
+          syncStatus: 'error',
+          syncNotice:
+            result === 'change_limit'
+              ? '이번 시즌 학교 변경 횟수를 다 썼어요. 다음 시즌에 바꿀 수 있어요.'
+              : result === 'change_cooldown'
+                ? '학교는 마지막 변경 후 7일이 지나야 바꿀 수 있어요.'
+                : result === 'ownership_conflict'
+                  ? '다른 사용자가 등록한 학교예요. 같은 이름 그대로면 참여할 수 있지만 표시 정보는 바꿀 수 없어요.'
+                  : result === 'name_conflict'
+                    ? '이미 다른 학교가 쓰는 표기와 겹쳐요. 다른 이름을 골라 주세요.'
+                    : '서버에 학교 정보를 저장하지 못했어요. 이전 학교를 유지할게요.',
+        })
+      } else {
+        set({
+          syncStatus: 'ok',
+          syncNotice: '학교 정보가 저장되고 선택됐어요.',
+        })
+      }
+    })
+    return decision
+  },
   ...initialState,
   ...persisted,
   // 구버전 저장분 가드 — 신규 필드 undefined 방지
   customSchoolName: persisted.customSchoolName ?? '',
   customSchoolShortName: persisted.customSchoolShortName ?? '',
+  // 구버전 'custom' id migration — 이름이 있으면 이름 기반 stable key 로.
+  // (사용자 데이터 삭제 없음. 이름이 없으면 그대로 두고 저장 버튼이 유도)
+  schoolId:
+    persisted.schoolId === 'custom' &&
+    (persisted.customSchoolName ?? '').trim().length >= 2
+      ? customSchoolStableKey(persisted.customSchoolName ?? '')
+      : (persisted.schoolId ?? null),
 
   checkChange: (schoolId, now = Date.now()) => {
     const season = seasonAt(now)
@@ -110,6 +205,11 @@ export const useCampusThemeStore = create<CampusThemeState>((set, get) => ({
   selectSchool: (schoolId, now = Date.now()) => {
     const decision = get().checkChange(schoolId, now)
     if (!decision.allowed) return decision
+    // 커스텀 학교는 saveCustomSchool 의 명시 저장 버튼으로만 확정합니다.
+    // 라디오/프로그램 호출로는 로컬도 서버도 바뀌지 않습니다.
+    if (schoolId === 'custom' || schoolId.startsWith('custom-')) {
+      return decision
+    }
     // 서버가 거부하면 되돌릴 이전 상태
     const prevSnapshot: CampusThemePersisted = {
       schoolId: get().schoolId,
@@ -143,14 +243,20 @@ export const useCampusThemeStore = create<CampusThemeState>((set, get) => ({
     const before = { ...prevSnapshot }
     void import('./campusStore').then(async (m) => {
       const result = await m.syncSchoolSelection(schoolId)
-      if (result === 'change_limit' || result === 'not_ready') {
+      if (
+        result === 'change_limit' ||
+        result === 'change_cooldown' ||
+        result === 'not_ready'
+      ) {
         persist(before)
         set({
           ...before,
           syncNotice:
             result === 'change_limit'
               ? '이번 시즌 학교 변경 횟수를 다 썼어요. 다음 시즌에 바꿀 수 있어요.'
-              : '서버에 학교 선택을 저장하지 못했어요. 이전 학교를 유지할게요.',
+              : result === 'change_cooldown'
+                ? '학교는 마지막 변경 후 7일이 지나야 바꿀 수 있어요.'
+                : '서버에 학교 선택을 저장하지 못했어요. 이전 학교를 유지할게요.',
         })
       } else if (result === 'selected' || result === 'changed') {
         set({ syncNotice: '학교 선택이 서버에 저장됐어요.' })
@@ -237,6 +343,8 @@ export function displaySchoolName(
   presetName: string | undefined,
   customName: string,
 ): string {
-  if (schoolId === 'custom') return customName || '직접 설정 학교'
+  if (schoolId === 'custom' || schoolId?.startsWith('custom-')) {
+    return customName || '직접 설정 학교'
+  }
   return presetName ?? '미선택'
 }

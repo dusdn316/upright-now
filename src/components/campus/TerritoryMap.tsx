@@ -38,7 +38,16 @@ export function useSchoolColor(): (schoolId: string | null) => string | null {
 
 export function schoolShortName(schoolId: string | null): string {
   if (!schoolId) return '중립'
-  return getSchoolPreset(schoolId)?.short ?? '기타 학교'
+  const preset = getSchoolPreset(schoolId)
+  if (preset) return preset.short
+  if (schoolId.startsWith('custom')) {
+    // 내 커스텀 학교면 내가 입력한 짧은 표기를 씁니다.
+    const me = useCampusThemeStore.getState()
+    if (schoolId === me.schoolId && me.customSchoolShortName.trim().length >= 2) {
+      return me.customSchoolShortName
+    }
+  }
+  return '기타 학교'
 }
 
 export function TerritoryMap({

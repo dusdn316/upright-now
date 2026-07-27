@@ -79,7 +79,10 @@ export function resolveCampusTheme(
   schoolId: string | null | undefined,
   customColor?: string | null,
 ): CampusThemeTokens | null {
-  const preset = getSchoolPreset(schoolId)
+  const preset =
+    getSchoolPreset(schoolId) ??
+    // 커스텀 stable key(custom-xxxx)는 '기타 / 직접 설정' 프리셋으로 그립니다.
+    (schoolId?.startsWith('custom') ? getSchoolPreset('custom') : undefined)
   if (!preset) return null
 
   const isCustom = Boolean(preset.custom)
@@ -110,5 +113,6 @@ export function listSchools() {
 }
 
 export function isCustomSchool(schoolId: string | null | undefined): boolean {
-  return schoolId === CUSTOM_SCHOOL_ID
+  // 'custom'(구버전) 과 'custom-xxxx'(stable key) 모두 커스텀입니다.
+  return schoolId === CUSTOM_SCHOOL_ID || Boolean(schoolId?.startsWith('custom-'))
 }

@@ -4,7 +4,7 @@ import { parseFlag } from '@/lib/feature-flags/flags'
 import { MockCampusRepository, type CampusIdentity } from './mockRepository'
 import { SupabaseCampusRepository } from './supabaseRepository'
 import { getCampusMemberId } from './identity'
-import { customSchoolStableKey, useCampusThemeStore } from './campusThemeStore'
+import { useCampusThemeStore } from './campusThemeStore'
 import { useDemoStore } from '@/features/demo/demoMode'
 import { rankStandings } from './contribution'
 import { seasonAt } from './season'
@@ -184,27 +184,36 @@ export function selectMyTileCount(state: CampusStoreState, schoolId: string | nu
  */
 export async function syncSchoolSelection(
   schoolId: string,
-): Promise<'selected' | 'changed' | 'unchanged' | 'change_limit' | 'not_ready'> {
+): Promise<
+  | 'selected' | 'changed' | 'unchanged' | 'change_limit' | 'change_cooldown'
+  | 'ownership_conflict' | 'name_conflict' | 'not_ready'
+> {
   if (!repository || repository.kind !== 'supabase') return 'unchanged'
   // 데모 모드의 임시 선택은 서버 membership 에 기록하지 않습니다.
   if (useDemoStore.getState().isDemo) return 'unchanged'
   const repo = repository as import('./supabaseRepository').SupabaseCampusRepository
 
-  let serverSchoolId = schoolId
-  if (schoolId === 'custom') {
+  if (schoolId.startsWith('custom-')) {
+    // 이름·짧은 이름·색이 검증된 뒤에만 호출됩니다 (saveCustomSchool).
     const theme = useCampusThemeStore.getState()
-    const name = theme.customSchoolName || '직접 설정 학교'
-    const key = customSchoolStableKey(name)
     const upserted = await repo.upsertCustomSchool(
-      key,
-      name,
-      theme.customSchoolShortName || name.slice(0, 8),
+      schoolId,
+      theme.customSchoolName,
+      theme.customSchoolShortName,
       theme.customColor,
     )
-    if (upserted === 'ownership_conflict' || upserted === 'invalid') {
+    // existing = 다른 사용자가 만든 같은 학교 — 참여는 허용됩니다.
+    // 충돌류는 사유를 그대로 올려 화면이 구분해 안내하게 합니다.
+    if (upserted === 'ownership_conflict' || upserted === 'name_conflict') {
+      return upserted
+    }
+    if (
+      upserted !== 'created' &&
+      upserted !== 'updated' &&
+      upserted !== 'existing'
+    ) {
       return 'not_ready'
     }
-    serverSchoolId = key
   }
-  return (await repo.selectSchool?.(serverSchoolId)) ?? 'not_ready'
+  return (await repo.selectSchool?.(schoolId)) ?? 'not_ready'
 }

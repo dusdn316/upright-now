@@ -308,7 +308,10 @@ export class SupabaseCampusRepository implements CampusRepository {
     displayName: string,
     shortName: string,
     color: string,
-  ): Promise<'created' | 'updated' | 'name_conflict' | 'ownership_conflict' | 'invalid' | 'not_ready'> {
+  ): Promise<
+    | 'created' | 'updated' | 'existing'
+    | 'name_conflict' | 'ownership_conflict' | 'invalid' | 'not_ready'
+  > {
     const supabase = await getSupabase()
     if (!supabase) return 'not_ready'
     await ensureAnonymousUser()
@@ -321,7 +324,7 @@ export class SupabaseCampusRepository implements CampusRepository {
     if (error) return 'not_ready'
     const result = (data as { result?: string } | null)?.result
     if (
-      result === 'created' || result === 'updated' ||
+      result === 'created' || result === 'updated' || result === 'existing' ||
       result === 'name_conflict' || result === 'ownership_conflict' ||
       result === 'invalid'
     ) {
@@ -333,7 +336,10 @@ export class SupabaseCampusRepository implements CampusRepository {
   /** 서버 membership 갱신 — 다른 학교로의 기여 위조를 서버가 차단하는 기반 */
   async selectSchool(
     schoolId: string,
-  ): Promise<'selected' | 'changed' | 'unchanged' | 'change_limit' | 'not_ready'> {
+  ): Promise<
+    | 'selected' | 'changed' | 'unchanged'
+    | 'change_limit' | 'change_cooldown' | 'not_ready'
+  > {
     const supabase = await getSupabase()
     if (!supabase) return 'not_ready'
     await ensureAnonymousUser()
@@ -344,7 +350,8 @@ export class SupabaseCampusRepository implements CampusRepository {
     const result = (data as { result?: string } | null)?.result
     if (
       result === 'selected' || result === 'changed' ||
-      result === 'unchanged' || result === 'change_limit'
+      result === 'unchanged' || result === 'change_limit' ||
+      result === 'change_cooldown'
     ) {
       return result
     }
