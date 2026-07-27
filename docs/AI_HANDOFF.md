@@ -167,3 +167,23 @@ rollback SQL 은 파일 하단 주석). 실행 전까지 라이브 방은 15/25/
 - **Preview 플래그**: 카메라·친구방·Realtime·캠퍼스 테마/영토전 ON,
   campus Supabase OFF(mock), QA Lab OFF. Production 미변경.
 - main 병합·Production 배포·campus SQL 실행은 모두 사용자 승인 대기.
+
+## v1.1.0-rc.1 — RELEASE FREEZE (2026-07-27)
+
+- **라이브 SQL 4건 적용 완료** (사용자가 직접 실행, 재실행 금지):
+  20260726_expand_room_duration · 20260726_room_lifecycle_security ·
+  20260727_campus_realtime_v2 · 20260727_room_presence_cleanup.
+  활성 시즌 season-15, Preview 는 CAMPUS_SUPABASE=true(라이브).
+- **PostgREST 캐시 주의**: 직접 RPC 목록 반영은 schema cache 상태에 따라
+  늦을 수 있음. 앱은 `is_room_member` 를 직접 RPC 로 호출하지 않으며,
+  `cleanup_stale_members` 내부 게이트로 정상 동작 확인됨.
+- **Realtime 검증**: campus_territories/…_events postgres_changes 라이브
+  수신 확인. 구독 클라이언트는 인증 JWT 필요(RLS) — 표준 앱 클라이언트는
+  자동. 자체 스크립트로 검증할 땐 `realtime.setAuth(token)` 필수.
+- **배포**: Vercel env 가 sensitive 라 `vercel pull` 은 [SENSITIVE]
+  플레이스홀더만 받음 → 로컬 prebuilt 금지, 항상 `npx vercel deploy`
+  (클라우드 빌드). `.vercelignore` 가 로컬 개인 파일 업로드를 차단.
+- **미해결(사용자 몫)**: Production env 에 캠퍼스·Realtime 플래그 미설정
+  (INTEGRATION_STATUS 참조), 실카메라 임계값 실기기 미검증, 스모크 테스트
+  데이터 정리 SQL 실행(완료 보고의 FINAL_SMOKE_CLEANUP_SQL).
+- main 병합·Production 배포는 v1.1.0-rc.1 수동 검증 승인 후.

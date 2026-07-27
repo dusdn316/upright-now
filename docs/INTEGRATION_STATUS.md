@@ -223,3 +223,77 @@ Production 환경변수는 변경하지 않았고, campus SQL 은 어떤 DB 에�
   `vercel deploy`(클라우드 빌드)를 사용할 것. 소스 업로드에서 로컬 개인
   파일을 제외하기 위해 `.vercelignore` 를 추가했다.
 - main 병합·Production 배포·Production 환경변수 변경 없음.
+
+## 2026-07-27 RELEASE FREEZE — v1.1.0-rc.1
+
+### 라이브 Supabase 적용 상태 (재실행 금지)
+
+아래 4개 SQL 은 사용자가 라이브에 실행 완료했다. 다시 실행하지 않는다.
+
+1. `20260726_expand_room_duration.sql`
+2. `20260726_room_lifecycle_security.sql`
+3. `20260727_campus_realtime_v2.sql`
+4. `20260727_room_presence_cleanup.sql`
+
+확인된 라이브 상태: active season `season-15` · Preview
+CAMPUS_SUPABASE=true · room heartbeat/stale cleanup · custom school 공유
+가입(existing) · 점수 서버 결정 · 원장 직접 SELECT 차단 · 학교 변경
+7일 제한 · stretch sessionId 중복 차단.
+
+**PostgREST 캐시 주의**: schema cache 상태에 따라 직접 RPC 목록 반영이
+늦을 수 있다. 앱은 `is_room_member` 를 직접 RPC 로 호출하지 않으며
+(`cleanup_stale_members` 내부 게이트로 사용), 내부 게이트는 라이브에서
+정상 동작을 확인했다.
+
+### 프리즈 중 발견·수정한 P1 — 익명 가입 직후 401 (PGRST303)
+
+- 증상: room-live e2e 가 전체 스위트에서 간헐 실패. 계측 결과 익명
+  signup 200 직후 `create_room` 이 **401 PGRST303 "JWT issued at
+  future"** — Supabase 내부(GoTrue↔PostgREST) 시계 오차로 발급 직후
+  ~1초 창의 토큰이 거부됨. 신규 사용자의 "가입 직후 첫 액션"(방 만들기,
+  학교 선택)이 정확히 이 창에 걸리는 실제 제품 결함.
+- 수정: `src/lib/supabase/client.ts` 의 클라이언트 fetch 를
+  `fetchRetryingClockSkew` 로 교체 — 401+PGRST303 인 경우에만 1.2초 후
+  1회 재시도(요청은 실행 전 거부라 재시도 안전, 그 외 오류는 불변).
+  회귀 스펙 `src/lib/supabase/clockSkewFetch.spec.ts` 5건 추가.
+- 판정 로직·점수·RPC 서명 등 제품 규칙 변경 없음.
+
+### 테스트 플레이크 기록 (재실행으로 덮지 않음)
+
+- unit 1회 이상 실행(39분·35/46 파일·11 errors): 동시 작업으로 인한
+  리소스 고갈로 vitest worker 가 실패한 환경 플레이크. 직후 단독
+  재실행은 46파일 394/394·51초 clean. 제품 결함 아님.
+- e2e `/campus/map` OFF 리다이렉트 1회 실패(21.5분 런): 5초 렌더 타임아웃
+  초과였고 실패 스냅샷에 정상 렌더·리다이렉트가 찍혀 있음. 부하 지연
+  플레이크로 판정(다른 3개 런 전부 통과). 제품 결함 아님.
+- room-live 실패 2회는 위 PGRST303 로 근본 원인 확인 후 코드로 수정.
+
+### 최종 게이트 (v1.1.0-rc.1 기준)
+
+- assets:verify 112 검사·missing 0·broken 0 / lint 에러 0 / typecheck 통과
+- unit **399/399** (47 파일 — clockSkewFetch 5건 포함) / build 통과
+- e2e **94/94** 단일 클린 런 (room-live 라이브 Supabase 포함, 3.8분)
+- campus-live: 기여→점령/방어(서버 점수 결정)→Realtime 구독 수신까지
+  라이브 확인. 원장 직접 SELECT 차단·membership 규칙·dedup 라이브 검증은
+  PHASE B 스모크 21/22(+is_room_member 내부 게이트 검증) 참조.
+- 미커밋 artifacts PNG 는 픽셀 비교 결과 캡처 타이밍(애니메이션 중간
+  프레임)·인코딩 차이로 판정 — 승인 baseline(e09c423) 유지, restore 처리.
+
+### Production 환경 감사 (이름만 확인, 값·설정 미변경)
+
+- 존재: VITE_SUPABASE_URL · VITE_SUPABASE_ANON_KEY ·
+  VITE_ENABLE_CAMERA · VITE_ENABLE_FRIEND_ROOM — `[configured]`
+- **누락(배포 전 사용자 설정 필요, 의도값)**: VITE_ENABLE_REALTIME=true ·
+  VITE_ENABLE_CAMPUS_THEME=true · VITE_ENABLE_CAMPUS_TERRITORY=true ·
+  VITE_ENABLE_CAMPUS_SUPABASE=true · VITE_ENABLE_QA_LAB=false
+  (미설정 플래그는 코드 기본값 false 로 동작 — 현 Production 은 안정판
+  거동 유지 중이며, v1.1 캠퍼스 공개 시점에 위 5개를 넣어야 한다)
+
+### RC 산출물
+
+- 태그: `v1.1.0-rc.1` (integration/v1.1-all-features HEAD)
+- RC Preview(항상 최신, Vercel 로그인 필요):
+  https://upright-now-suhyunkim1105-2875-suhyunkim1105-2875s-projects.vercel.app
+- 스모크 테스트 데이터 정리 SQL 은 완료 보고의 FINAL_SMOKE_CLEANUP_SQL
+  (1회용, 마이그레이션 아님 — custom-b0b1e57 관련 데이터만 제거)
+- main 병합·Production 배포는 수동 검증(체크리스트 A~G) 승인 후 진행.

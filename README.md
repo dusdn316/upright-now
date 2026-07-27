@@ -5,6 +5,24 @@
 
 **Production**: https://upright-now.vercel.app
 
+## 릴리스 상태 (2026-07-27)
+
+| 구분 | 내용 |
+|---|---|
+| Production 안정판 | `main` — 개인 세션 + 2인 친구 방 (캠퍼스 없음) |
+| v1.1 Release Candidate | `integration/v1.1-all-features` · 태그 `v1.1.0-rc.1` — 모드 시스템·경제 v2·승인 에셋·캠퍼스 테마/영토전(라이브 Supabase)·친구 방 heartbeat/정리 |
+| RC Preview | Vercel Preview(로그인 필요), 전 기능 ON · QA Lab OFF |
+
+v1.1 은 Production 배포 전 수동 검증 대기 상태입니다
+(`docs/INTEGRATION_STATUS.md` 의 체크리스트가 단일 기준):
+
+- **실카메라 임계값 미검증** — 판정 지터·프레이밍 게이트 18° 는 실기기
+  확인 전까지 조정 금지
+- **학교 인증 미도입** — 캠퍼스 학교 선택은 자율 신고이며 재학 인증이 없음
+  (화면에 비공식 고지 노출)
+- **카메라 원본 미저장** — 영상·프레임·랜드마크·자세 좌표는 어떤 서버에도
+  전송하지 않음 (아래 개인정보 처리 원칙)
+
 ## 구현된 핵심 기능
 
 - **온디바이스 자세 감지** — MediaPipe Pose Landmarker(브라우저 내 추론),
@@ -60,8 +78,12 @@ npx playwright test e2e/room-live.spec.ts
 |---|---|
 | `VITE_ENABLE_CAMERA` | 실제 웹캠 자세 감지 on/off |
 | `VITE_ENABLE_FRIEND_ROOM` | 2인 친구 방 on/off |
-| `VITE_SUPABASE_URL` | Supabase 프로젝트 URL (친구 방) |
-| `VITE_SUPABASE_ANON_KEY` | Supabase publishable key (친구 방) |
+| `VITE_ENABLE_REALTIME` | Supabase Realtime 구독 on/off |
+| `VITE_ENABLE_CAMPUS_THEME` | 캠퍼스 학교 테마 on/off (v1.1) |
+| `VITE_ENABLE_CAMPUS_TERRITORY` | 캠퍼스 영토전 on/off (v1.1) |
+| `VITE_ENABLE_CAMPUS_SUPABASE` | 캠퍼스 라이브 저장소 (off = mock) |
+| `VITE_SUPABASE_URL` | Supabase 프로젝트 URL |
+| `VITE_SUPABASE_ANON_KEY` | Supabase publishable key |
 | `VITE_ENABLE_QA_LAB` | 개발용 QA Lab (운영 기본 off) |
 
 친구 방 백엔드는 `supabase/schema.sql` 로 구성합니다
