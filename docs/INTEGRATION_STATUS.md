@@ -196,3 +196,30 @@ Production 환경변수는 변경하지 않았고, campus SQL 은 어떤 DB 에�
   `cleanup_abandoned_rooms()` RPC(모든 멤버가 45초+ 무응답인 방만 closed,
   1회 10건 제한)를 다음 사용자의 방 생성/입장 시점에 best-effort 로 호출해
   지연 정리한다. 활성 멤버가 한 명이라도 있는 방은 닫히지 않는다.
+
+## 2026-07-27 PHASE B — 라이브 SQL 적용 확인 + Supabase Preview 전환
+
+- 사용자가 20260727 SQL 2건(campus_realtime_v2 → room_presence_cleanup)을
+  라이브 Supabase 에 실행 완료.
+- anon key 스모크 검증(클라이언트와 동일 권한, 익명 2명): 21/22 PASS —
+  시즌 season-15 자동 준비 · 디렉터리 조회 · 원장 직접 SELECT 차단 ·
+  커스텀 학교 created/existing/ownership_conflict/name_conflict/invalid ·
+  membership selected/unchanged/change_cooldown(+next_allowed_at) ·
+  스트레칭 sessionId dedup(eventId 변경해도 duplicate_event) ·
+  회복 동시 2건 중 1건만 수락(advisory lock) · my_contribution/standings ·
+  cleanup_abandoned_rooms · 비멤버 heartbeat 거부.
+  유일한 FAIL 은 `is_room_member` 의 PostgREST 직접 RPC 노출(스키마 캐시)
+  — 함수 자체는 DB 에 존재하고 내부 호출(cleanup_stale_members 의 게이트)로
+  정상 동작 확인. 클라이언트는 이 함수를 직접 호출하지 않으므로 앱 무영향.
+- 스모크가 남긴 라이브 데이터(정리 원하면 SQL 로 삭제 가능):
+  익명 사용자 2명, 커스텀 학교 `custom-b0b1e57` "검증테스트대학"(멤버 2),
+  season-15 기여 40점(stretch 20 + recovery 20).
+- Preview 환경 `VITE_ENABLE_CAMPUS_SUPABASE=true` 로 전환하고 클라우드
+  빌드 Preview 재배포. mock(false) Preview 는 더 이상 기본이 아님.
+- **배포 방법 주의(재발 방지)**: Vercel env 가 sensitive 로 표시돼 있어
+  `vercel pull` 은 `[SENSITIVE]` 플레이스홀더만 받는다. 따라서 로컬
+  `vercel build` + `deploy --prebuilt` 는 플레이스홀더가 번들에 박혀
+  깨진 배포가 된다(upright-ne01yanto 가 그 사례 — 폐기). 반드시
+  `vercel deploy`(클라우드 빌드)를 사용할 것. 소스 업로드에서 로컬 개인
+  파일을 제외하기 위해 `.vercelignore` 를 추가했다.
+- main 병합·Production 배포·Production 환경변수 변경 없음.
