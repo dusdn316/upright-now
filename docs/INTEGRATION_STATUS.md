@@ -380,3 +380,26 @@ CAMPUS_SUPABASE=true · room heartbeat/stale cleanup · custom school 공유
   하나로 96 seed(기존 36 보존+60 추가·미래 시즌 96)·디렉터리·apply v3·
   membership RPC·publication·검증 SELECT·rollback 주석 포함. 멱등.
   기존 4개 migration 재실행 불필요, 라이브 실행은 PHASE B 대기.
+
+## 2026-07-28 RC2 PHASE B — 라이브 검증 완료 (v1.1.0-rc.2)
+
+- 최종 SQL(20260727_campus_final_grid_realtime.sql) 사용자 실행 완료.
+  라이브 확인: active season-15 **96영토** · 데이터 초기화 없음(직전 정리로
+  owned 0에서 시작) · 디렉터리 테이블·publication 3테이블.
+- 라이브 스모크 18항목 중 서버 항목 16 PASS: v3 권위 응답(acceptedPoints·
+  authoritativeMyContribution·updatedTerritory·serverTime) · 권위값 ==
+  campus_my_contribution(즉시 갱신 근거) · duplicate_session 구분 ·
+  campus_my_membership · RC2검증대학교 created→directory 반영 ·
+  타 사용자 existing 합류 · 비소유자 표시정보 변경 거부.
+- Realtime 2건은 재검증으로 PASS: 구독자 바인딩 완료(system ok) 후
+  territory UPDATE·directory INSERT 수신 확인. 최초 0건은 SUBSCRIBED
+  직후 서버측 바인딩 완료 전에 액션을 보낸 테스트 하네스 레이스로 판정
+  (앱은 미연결 폴백 polling·재연결 full reload 로 커버).
+- 테스트 데이터는 RC2검증대학교(custom-8d925212)·RC2검증보조대학교
+  (custom-e8ab11b6)·rc2-smoke- 접두사만 사용. 정리는
+  supabase/manual/20260727_rc2_smoke_cleanup.sql (수동 1회용).
+- RC2 Preview(CAMPUS_SUPABASE=true, 클라우드 빌드) 재배포. mock preview 는
+  --build-env 일회성 오버라이드로 유지(저장 env 불변).
+- 게이트(코드 f874664 기준): unit 415/415 · e2e 94/94 · lint 0 ·
+  typecheck·build OK · assets 112/0/0. rc.2 는 문서·정리 SQL 추가 커밋 위 태그.
+- main 병합·Production 배포·Production env 변경 없음. rc.1 태그 불변.
