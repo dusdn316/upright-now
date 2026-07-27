@@ -1,3 +1,4 @@
+import { CAMPUS_GRID_SEED } from './campusGridOverlay'
 import type { CampusTile, CampusZoneId } from './types'
 
 /**
@@ -52,27 +53,24 @@ export const ZONE_BASE_DEFENSE: Record<CampusZoneId, number> = {
   pond: 110,
 }
 
-/** 새 시즌의 초기 지도 — 모든 타일이 중립 상태입니다. */
+/**
+ * 새 시즌의 초기 지도 — 모든 타일이 중립 상태입니다.
+ * zone·name 은 UI overlay·SQL seed 와 같은 campusGridSeedManifest(96)를 씁니다.
+ */
 export function createSeasonMap(seasonId: string, now: number): CampusTile[] {
-  const tiles: CampusTile[] = []
-  for (let y = 0; y < MAP_ROWS; y += 1) {
-    for (let x = 0; x < MAP_COLS; x += 1) {
-      const zone = zoneAt(x, y)
-      tiles.push({
-        id: tileId(seasonId, x, y),
-        seasonId,
-        x,
-        y,
-        zone,
-        ownerSchoolId: null,
-        challengerSchoolId: null,
-        defenseScore: ZONE_BASE_DEFENSE[zone],
-        challengeScore: 0,
-        updatedAt: now,
-      })
-    }
-  }
-  return tiles
+  return CAMPUS_GRID_SEED.map((entry) => ({
+    id: tileId(seasonId, entry.x, entry.y),
+    seasonId,
+    x: entry.x,
+    y: entry.y,
+    zone: entry.zone,
+    name: entry.name,
+    ownerSchoolId: null,
+    challengerSchoolId: null,
+    defenseScore: ZONE_BASE_DEFENSE[entry.zone],
+    challengeScore: 0,
+    updatedAt: now,
+  }))
 }
 
 /** 사람이 읽을 수 있는 타일 이름 — 스크린리더 라벨에 사용합니다. */

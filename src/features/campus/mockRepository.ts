@@ -216,11 +216,28 @@ function rolloverIfNeeded(state: MockState, now: number): MockState {
  * 메모리 캐시(`shared`)만 믿으면 탭 간 갱신 유실이 생깁니다.
  * localStorage 를 쓸 수 없는 환경에서는 메모리 캐시로 되돌아갑니다.
  */
+/** 구버전 저장분(name 없음·구 zone) 을 96 seed manifest 기준으로 보정합니다.
+ *  점령·점수·이벤트는 그대로 두고 표시 속성만 채웁니다. */
+function normalizeStoredTiles(state: MockState): MockState {
+  if (state.tiles.every((t) => typeof t.name === 'string' && t.name.length > 0)) {
+    return state
+  }
+  const seedTiles = createSeasonMap(state.season.id, Date.now())
+  const seedMap = new Map(seedTiles.map((t) => [`${t.x},${t.y}`, t]))
+  return {
+    ...state,
+    tiles: state.tiles.map((t) => {
+      const seed = seedMap.get(`${t.x},${t.y}`)
+      return seed ? { ...t, name: seed.name, zone: seed.zone } : { ...t, name: t.name ?? '' }
+    }),
+  }
+}
+
 function readState(now: number): MockState {
   const stored = loadLocal<MockState | null>(STORAGE_KEYS.campusMock, null)
   const hasStored = Boolean(stored && stored.season && Array.isArray(stored.tiles))
   const base = hasStored
-    ? (stored as MockState)
+    ? normalizeStoredTiles(stored as MockState)
     : (shared ?? seedState(seasonAt(now), now))
 
   shared = base
@@ -313,7 +330,10 @@ export class MockCampusRepository implements CampusRepository {
     return toSnapshot(readState(this.now()), this.identity())
   }
 
-  subscribe(listener: (snapshot: CampusSnapshot) => void): () => void {
+  subscribe(
+    listener: (snapshot: CampusSnapshot) => void,
+    onStatus?: (status: import('./types').CampusRealtimeStatus) => void,
+  ): () => void {
     this.listeners.add(listener)
     if (!this.bridge) {
       this.bridge = (state) => {
@@ -323,6 +343,9 @@ export class MockCampusRepository implements CampusRepository {
       localListeners.add(this.bridge)
       getChannel()
     }
+    // mock 은 BroadcastChannel 기반 로컬 실시간 — 즉시 연결 상태입니다.
+    // (화면 배지는 source==='mock' 일 때 별도 문구를 씁니다)
+    onStatus?.('connected')
     return () => {
       this.listeners.delete(listener)
     }

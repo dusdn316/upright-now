@@ -32,6 +32,8 @@ export const STORAGE_KEYS = {
   campusLedger: 'campus-ledger',
   /** 캠퍼스 영토전 mock 저장소 (Supabase 대체) */
   campusMock: 'campus-mock',
+  /** 캠퍼스 기여 유실 방지 outbox (미전송 이벤트 큐) */
+  campusOutbox: 'campus-outbox',
 } as const
 
 /* ------------------------------ 마이그레이션 ------------------------------ */

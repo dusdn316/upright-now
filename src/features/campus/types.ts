@@ -81,6 +81,8 @@ export interface CampusTile {
   x: number
   y: number
   zone: CampusZoneId
+  /** 영토 이름 (seed manifest 기준, 서버 name 컬럼과 동일) */
+  name: string
   ownerSchoolId: string | null
   challengerSchoolId: string | null
   defenseScore: number
@@ -154,4 +156,43 @@ export interface CampusSnapshot {
   /** 이번 시즌 내 기여도 */
   myContribution: number
   archived: CampusArchivedSeason[]
+}
+
+/* ------------------------- 학교 디렉터리 (안전 공개) ------------------------ */
+
+/**
+ * 모든 사용자에게 공개해도 되는 학교 표시 정보.
+ * created_by 등 소유·개인 관련 열은 여기 절대 포함하지 않습니다.
+ */
+export interface CampusSchoolDirectoryEntry {
+  id: string
+  displayName: string
+  shortName: string
+  color: string
+  isCustom: boolean
+}
+
+/* ----------------------------- Realtime 상태 ----------------------------- */
+
+export type CampusRealtimeStatus =
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'offline'
+  | 'error'
+
+/* ------------------------------- 기여 outbox ------------------------------ */
+
+/**
+ * 아직 서버에 반영되지 못한 기여 이벤트 — 유실 방지용 로컬 큐.
+ * 영상·프레임·랜드마크·자세 상태·점수·개인 기준은 절대 저장하지 않습니다.
+ */
+export interface CampusOutboxItem {
+  eventId: string
+  kind: CampusContributionKind
+  sessionId: string | null
+  targetTileId: string | null
+  occurredAt: number
+  retryCount: number
+  lastError: string | null
 }

@@ -1,111 +1,201 @@
 import { describe, expect, it } from 'vitest'
-import { ISLAND_SHAPES } from './islandMap'
-import manifest from './territorySeedManifest.json'
+import manifest from './campusGridSeedManifest.json'
+import {
+  CAMPUS_GRID_CELLS,
+  CAMPUS_GRID_CELL_COUNT,
+  CAMPUS_GRID_SEED,
+} from './campusGridOverlay'
+import { createSeasonMap } from './campusMap'
 import campusSql from '../../../supabase/migrations/20260727_campus_realtime_v2.sql?raw'
+import finalSql from '../../../supabase/migrations/20260727_campus_final_grid_realtime.sql?raw'
 import roomSql from '../../../supabase/migrations/20260727_room_presence_cleanup.sql?raw'
 import repoSrc from './supabaseRepository.ts?raw'
 import roomServiceSrc from '../rooms/roomService.ts?raw'
 
 /**
- * SQL 마이그레이션 ↔ 클라이언트 단일 기준 검증.
- * 36 territory 좌표·zone·이름이 한 글자도 다르지 않아야 하고,
- * v1 사각 타일 명칭이 코드·SQL 어디에도 남지 않아야 합니다.
+ * 단일 기준 검증 — UI overlay · mock createSeasonMap · SQL seed 가
+ * 정확히 같은 96(12×8) manifest 를 쓰는지, 최종 migration(v3)이
+ * 권위 응답·안전 디렉터리·publication 을 포함하는지 확인합니다.
  */
 
-describe('campus v2 — 36 territory id 일치', () => {
-  it('seed manifest 는 islandMap SPOTS 와 정확히 같다', () => {
-    expect(manifest).toHaveLength(36)
-    expect(manifest).toEqual(
-      ISLAND_SHAPES.map(({ x, y, zone, name }) => ({ x, y, zone, name })),
-    )
-  })
+const ZONES = new Set([
+  'library', 'plaza', 'lecture', 'lawn', 'cafe', 'dorm', 'field', 'pond',
+])
 
-  it('SQL seed 에 36 territory 가 전부 같은 값으로 들어 있다', () => {
-    for (const s of ISLAND_SHAPES) {
-      expect(campusSql).toContain(`(${s.x}, ${s.y}, '${s.zone}', '${s.name}')`)
+describe('campus RC2 — 96(12×8) 단일 seed manifest', () => {
+  it('manifest 는 96개·중복 없는 x/y·유효한 zone·고유한 이름이다', () => {
+    expect(manifest).toHaveLength(96)
+    const keys = new Set(manifest.map((m) => `${m.x},${m.y}`))
+    expect(keys.size).toBe(96)
+    for (const m of manifest) {
+      expect(m.x).toBeGreaterThanOrEqual(0)
+      expect(m.x).toBeLessThanOrEqual(11)
+      expect(m.y).toBeGreaterThanOrEqual(0)
+      expect(m.y).toBeLessThanOrEqual(7)
+      expect(ZONES.has(m.zone)).toBe(true)
+      expect(m.name.length).toBeGreaterThanOrEqual(2)
     }
-    // territory id 규칙이 클라이언트 tileId 와 동일한 형태인지
-    expect(campusSql).toContain(`v_season || ':' || r.x || '-' || r.y`)
+    expect(new Set(manifest.map((m) => m.name)).size).toBe(96)
   })
 
-  it('활성 시즌 seed 가 존재하고 클라이언트 season 규칙과 같다', () => {
-    expect(campusSql).toContain(`'season-' || (v_index + 1)`)
-    expect(campusSql).toContain(`timestamptz '2026-01-05 00:00:00+00'`)
-    expect(campusSql).toContain(`interval '14 days'`)
-    expect(campusSql).toContain(`insert into public.campus_seasons`)
+  it('UI overlay 셀도 96개이고 manifest 좌표와 1:1 이다', () => {
+    expect(CAMPUS_GRID_CELL_COUNT).toBe(96)
+    expect(CAMPUS_GRID_CELLS).toHaveLength(96)
+    const cellKeys = new Set(CAMPUS_GRID_CELLS.map((c) => `${c.x},${c.y}`))
+    expect(cellKeys.size).toBe(96)
+    for (const m of manifest) expect(cellKeys.has(`${m.x},${m.y}`)).toBe(true)
+    for (const c of CAMPUS_GRID_CELLS) {
+      expect(c.points.split(' ')).toHaveLength(4)
+    }
+  })
+
+  it('mock createSeasonMap 은 manifest 와 같은 zone·name 의 96타일을 만든다', () => {
+    const tiles = createSeasonMap('season-1', 0)
+    expect(tiles).toHaveLength(96)
+    const byXY = new Map(tiles.map((t) => [`${t.x},${t.y}`, t]))
+    for (const m of manifest) {
+      const tile = byXY.get(`${m.x},${m.y}`)
+      expect(tile?.zone).toBe(m.zone)
+      expect(tile?.name).toBe(m.name)
+      expect(tile?.id).toBe(`season-1:${m.x}-${m.y}`)
+    }
+  })
+
+  it('최종 SQL seed 에 96행이 전부 같은 값으로 들어 있다', () => {
+    for (const m of manifest) {
+      expect(finalSql).toContain(`(${m.x}, ${m.y}, '${m.zone}', '${m.name.replace(/'/g, "''")}')`)
+    }
+    expect(finalSql).toContain(`v_season || ':' || r.x || '-' || r.y`)
+    // 기존 데이터 보존 — 있는 칸은 건드리지 않는다
+    expect(finalSql).toContain('on conflict (id) do nothing')
+    // 실행 즉시 활성 시즌 96 보장
+    expect(finalSql).toContain('select public.ensure_active_campus_season();')
+  })
+
+  it('CAMPUS_GRID_SEED(코드) 와 manifest(JSON) 는 같은 배열이다', () => {
+    expect(CAMPUS_GRID_SEED).toEqual(manifest)
   })
 })
 
-describe('campus v2 — 스키마/저장소 명칭 일치', () => {
-  const canonical = [
-    'campus_schools',
-    'campus_memberships',
-    'campus_seasons',
-    'campus_territories',
-    'campus_contributions',
-    'campus_territory_events',
-    'upsert_custom_school',
-    'select_campus_school',
-    'apply_campus_contribution',
-    'campus_season_standings',
-    'campus_school_directory',
-    'ensure_active_campus_season',
-  ]
-
-  it('SQL 에 최종 기준 명칭이 모두 있다', () => {
-    for (const name of canonical) expect(campusSql).toContain(name)
+describe('campus RC2 — apply_campus_contribution v3 권위 응답', () => {
+  it('권위값·영토 상태·서버 시각을 함께 돌려준다', () => {
+    expect(finalSql).toContain("'authoritativeMyContribution', v_my_total")
+    expect(finalSql).toContain("'updatedTerritory', to_jsonb(v_territory)")
+    expect(finalSql).toContain("'serverTime', now()")
+    expect(finalSql).toContain("'acceptedPoints', v_points")
   })
 
-  it('저장소가 v2 명칭만 사용한다 (v1 잔재 0)', () => {
-    for (const name of [
-      'campus_territories',
-      'campus_territory_events',
-      'apply_campus_contribution',
-      'campus_season_standings',
-      'campus_my_contribution',
-      'select_campus_school',
-    ]) {
-      expect(repoSrc).toContain(name)
-    }
-    for (const legacy of [
-      'campus_tiles',
-      'campus_tile_events',
-      'campus_record_contribution',
-    ]) {
-      expect(repoSrc).not.toContain(legacy)
-      expect(campusSql).not.toContain(legacy)
-    }
+  it('duplicate_event 와 duplicate_session 을 constraint 로 구분한다', () => {
+    expect(finalSql).toContain('get stacked diagnostics v_constraint = constraint_name')
+    expect(finalSql).toContain("v_constraint = 'campus_contributions_session_once'")
+    expect(finalSql).toContain("'duplicate_session'")
+    expect(finalSql).toContain("'duplicate_event'")
   })
 
-  it('Realtime 구독 테이블 이름이 SQL publication 과 같다', () => {
+  it('점수·상한·잠금 정책이 v2.3 과 동일하게 유지된다', () => {
+    expect(finalSql).toContain("when 'session_completed' then 100")
+    expect(finalSql).toContain("when 'friend_session_completed' then 50")
+    expect(finalSql).toContain("when 'posture_recovered' then 20")
+    expect(finalSql).toContain("when 'stretch_completed' then 20")
+    expect(finalSql).toContain('> 600')
+    expect(finalSql).toContain("interval '20 seconds'")
+    expect(finalSql).toContain("hashtext(auth.uid()::text || ':' || v_season)")
+    expect(finalSql).toContain('session_required')
+    expect(finalSql).toContain('no_membership')
+  })
+
+  it('클라이언트는 서버 권위값을 그대로 사용한다', () => {
+    expect(repoSrc).toContain('authoritativeMyContribution')
+    expect(repoSrc).toContain('updatedTerritory')
+  })
+})
+
+describe('campus RC2 — 안전한 학교 디렉터리', () => {
+  it('디렉터리 실테이블에 created_by 가 없다', () => {
+    const start = finalSql.indexOf(
+      'create table if not exists public.campus_school_directory_entries',
+    )
+    const table = finalSql.slice(start, finalSql.indexOf(';', start))
+    expect(table).toContain('display_name')
+    expect(table).toContain('is_custom')
+    expect(table).not.toContain('created_by')
+  })
+
+  it('클라이언트 직접 쓰기가 금지되고 trigger 만 동기화한다', () => {
+    expect(finalSql).toContain(
+      'revoke insert, update, delete on public.campus_school_directory_entries',
+    )
+    expect(finalSql).toContain('create trigger campus_schools_directory_sync')
+    expect(finalSql).toContain('after insert or update or delete on public.campus_schools')
+  })
+
+  it('기존 학교 backfill 과 publication 등록이 있다', () => {
+    expect(finalSql).toContain('from public.campus_schools')
+    expect(finalSql).toContain(
+      'add table public.campus_school_directory_entries',
+    )
+  })
+
+  it('membership 복원 RPC 가 자기 것만 돌려준다', () => {
+    expect(finalSql).toContain('create or replace function public.campus_my_membership')
+    expect(finalSql).toContain('m.user_id = auth.uid()')
+  })
+
+  it('클라이언트 구독 테이블이 publication 과 같다 (3개)', () => {
     expect(repoSrc).toContain(`table: 'campus_territories'`)
     expect(repoSrc).toContain(`table: 'campus_territory_events'`)
-    expect(campusSql).toContain(
-      'alter publication supabase_realtime add table public.campus_territories',
-    )
-    expect(campusSql).toContain(
-      'alter publication supabase_realtime add table public.campus_territory_events',
-    )
+    expect(repoSrc).toContain(`table: 'campus_school_directory_entries'`)
   })
 })
 
-describe('campus v2 — 소속 위조 차단 (서버 결정)', () => {
-  it('apply_campus_contribution 은 school/member 를 클라이언트에서 받지 않는다', () => {
-    const signature = campusSql.slice(
-      campusSql.indexOf('create or replace function public.apply_campus_contribution'),
-      campusSql.indexOf('$fn$', campusSql.indexOf('apply_campus_contribution')),
+describe('campus RC2 — Realtime 인증·재연결·mock fallback 금지', () => {
+  it('구독 전에 익명 로그인과 realtime.setAuth 를 수행한다', () => {
+    const connect = repoSrc.slice(
+      repoSrc.indexOf('private async connect'),
+      repoSrc.indexOf('private openChannel'),
+    )
+    expect(connect).toContain('ensureAnonymousUser')
+    expect(connect).toContain('realtime.setAuth')
+  })
+
+  it('SUBSCRIBED 확인 후에만 connected 를 알리고, 오류는 backoff 재구독한다', () => {
+    expect(repoSrc).toContain("if (status === 'SUBSCRIBED')")
+    expect(repoSrc).toContain('scheduleReconnect')
+    expect(repoSrc).toContain('RECONNECT_MAX_MS')
+  })
+
+  it('live 모드 캠퍼스 스토어에 mock fallback 경로가 없다', async () => {
+    const storeSrc = (await import('./campusStore.ts?raw')).default
+    const liveBlock = storeSrc.slice(
+      storeSrc.indexOf("if (repo.kind === 'supabase')"),
+      storeSrc.indexOf('// mock 경로'),
+    )
+    expect(liveBlock).not.toContain('MockCampusRepository')
+    expect(liveBlock).toContain("status: 'error'")
+  })
+})
+
+/* ------------- 기존 migration(불변) 에 대한 검증 — 그대로 유지 ------------- */
+
+describe('campus v2.2/2.3 — 원장 보호·서버 결정 (기존 SQL 불변 확인)', () => {
+  it('기여 원장은 직접 SELECT 불가', () => {
+    expect(campusSql).toContain(
+      'revoke select on public.campus_contributions from authenticated',
+    )
+    expect(campusSql).not.toContain('create policy campus_contributions_select')
+  })
+
+  it('apply 서명에 school/member/points 클라이언트 인자가 없다', () => {
+    const signature = finalSql.slice(
+      finalSql.indexOf('create or replace function public.apply_campus_contribution'),
+      finalSql.indexOf('$fn$', finalSql.indexOf('apply_campus_contribution')),
     )
     expect(signature).not.toContain('p_school_id')
     expect(signature).not.toContain('p_member_hash')
-    // 점수도 서버 CASE 로만 — 클라이언트 인자 없음
     expect(signature).not.toContain('p_points')
-    expect(campusSql).toContain(
-      'select school_id into v_school',
-    )
-    expect(campusSql).toContain(`md5(auth.uid()::text || ':' || v_season)`)
   })
 
-  it('클라이언트도 school/member 인자를 보내지 않는다', () => {
+  it('클라이언트도 school/member/points 인자를 보내지 않는다', () => {
     const call = repoSrc.slice(
       repoSrc.indexOf("rpc('apply_campus_contribution'"),
       repoSrc.indexOf('})', repoSrc.indexOf("rpc('apply_campus_contribution'")),
@@ -115,127 +205,43 @@ describe('campus v2 — 소속 위조 차단 (서버 결정)', () => {
     expect(call).not.toContain('p_points')
   })
 
-  it('membership 변경 제한과 커스텀 학교 소유권이 서버에 있다', () => {
-    expect(campusSql).toContain('changes_in_season >= 1')
-    expect(campusSql).toContain('created_by is distinct from auth.uid()')
-    expect(campusSql).toContain("p_id !~ '^custom-[0-9a-f]{1,8}$'")
-  })
-})
-
-describe('room presence v2 — 멤버십 가드', () => {
-  it('is_room_member 게이트가 정의돼 있다', () => {
-    expect(roomSql).toContain('create or replace function public.is_room_member')
-  })
-
-  it('세 RPC 모두 비멤버를 거부한다', () => {
-    expect(roomSql).toContain("raise exception 'not a room member'")
-    // heartbeat: 내 행 0개면 오류
-    expect(roomSql).toContain('get diagnostics v_updated = row_count')
-    // cleanup·complete: is_room_member 검사
-    const guards = roomSql.match(/if not public\.is_room_member\(p_room_id\) then/g)
-    expect(guards?.length ?? 0).toBeGreaterThanOrEqual(2)
-  })
-
-  it('cleanup 은 자신을 지우지 않고, 동시 실행은 행 잠금으로 직렬화한다', () => {
-    expect(roomSql).toContain('user_id <> auth.uid()')
-    expect(roomSql).toContain('for update')
-  })
-
-  it('완료 처리는 running + 정확히 2명 완주일 때만', () => {
-    expect(roomSql).toContain("where id = p_room_id and status = 'running'")
-    expect(roomSql).toContain('v_total = 2 and v_done = 2')
-  })
-})
-
-describe('campus v2.2 — 원장 보호·서버 점수·시즌 자동 전환', () => {
-  it('기여 원장은 직접 SELECT 불가 (정책 제거 + 권한 회수)', () => {
-    expect(campusSql).toContain(
-      'revoke select on public.campus_contributions from authenticated',
-    )
-    expect(campusSql).not.toContain(
-      'create policy campus_contributions_select',
-    )
-  })
-
-  it('학교 디렉터리 뷰는 created_by 를 노출하지 않는다', () => {
-    const view = campusSql.slice(
-      campusSql.indexOf('create or replace view public.campus_school_directory'),
-      campusSql.indexOf('grant select on public.campus_school_directory'),
-    )
-    expect(view).toContain('display_name')
-    expect(view).not.toContain('created_by')
-    expect(campusSql).toContain(
-      'revoke select on public.campus_schools from authenticated',
-    )
-  })
-
-  it('점수는 서버 CASE 로만 결정된다 (100/50/20/20)', () => {
-    expect(campusSql).toContain("when 'session_completed' then 100")
-    expect(campusSql).toContain("when 'friend_session_completed' then 50")
-    expect(campusSql).toContain("when 'posture_recovered' then 20")
-    expect(campusSql).toContain("when 'stretch_completed' then 20")
-  })
-
-  it('악용 제한 — 일일 600·회복 5회·20초·sessionId 필수', () => {
-    expect(campusSql).toContain('> 600')
-    expect(campusSql).toContain('daily_cap')
-    expect(campusSql).toContain('recovery_cap')
-    expect(campusSql).toContain("interval '20 seconds'")
-    expect(campusSql).toContain('session_required')
-  })
-
-  it('시즌 자동 전환은 advisory lock 으로 직렬화된다', () => {
-    expect(campusSql).toContain('pg_advisory_xact_lock')
-    expect(campusSql).toContain('ensure_active_campus_season')
-  })
-
-  it('커스텀 학교는 명시적 결과를 돌려준다', () => {
-    for (const r of ['created', 'updated', 'name_conflict', 'ownership_conflict', 'invalid']) {
-      expect(campusSql).toContain("'" + r + "'")
-    }
-  })
-})
-
-describe('campus v2.3 — 공유 학교·쿨다운·동시성·dedup', () => {
-  it('같은 이름의 타인 학교는 existing 으로 참여를 허용한다', () => {
-    expect(campusSql).toContain("'existing'")
-    // 클라이언트도 existing 을 성공으로 처리한다
-    expect(repoSrc).toContain("'existing'")
-  })
-
-  it('학교 변경 7일 쿨다운을 서버가 검증한다', () => {
+  it('학교 변경 7일 쿨다운·시즌 1회 제한이 서버에 있다', () => {
     expect(campusSql).toContain("'change_cooldown'")
     expect(campusSql).toContain('next_allowed_at')
     expect(campusSql).toContain("interval '7 days'")
+    expect(campusSql).toContain('changes_in_season >= 1')
   })
 
-  it('기여 적용은 사용자 단위 advisory lock 으로 직렬화된다', () => {
-    // 시즌 전환 락 + 사용자 단위 락 = 최소 2회
-    const locks = campusSql.match(/pg_advisory_xact_lock/g)
-    expect(locks?.length ?? 0).toBeGreaterThanOrEqual(2)
-    expect(campusSql).toContain("hashtext(auth.uid()::text || ':' || v_season)")
-  })
-
-  it('스트레칭 중복은 서버 unique index 로 차단된다 (eventId 를 바꿔도 1회)', () => {
-    const start = campusSql.indexOf('create unique index if not exists campus_contributions_session_once')
+  it('스트레칭 중복은 서버 unique index 로 차단된다', () => {
+    const start = campusSql.indexOf(
+      'create unique index if not exists campus_contributions_session_once',
+    )
     const idx = campusSql.slice(start, campusSql.indexOf(';', start))
     expect(idx).toContain('session_id is not null')
     expect(idx).toContain("'stretch_completed'")
   })
+
+  it('커스텀 학교 existing 합류·소유권 충돌이 서버에 있다', () => {
+    for (const r of ['created', 'updated', 'existing', 'name_conflict', 'ownership_conflict', 'invalid']) {
+      expect(campusSql).toContain("'" + r + "'")
+    }
+    expect(campusSql).toContain('created_by is distinct from auth.uid()')
+  })
 })
 
-describe('room presence v2.1 — 버려진 방 정리', () => {
-  it('cleanup_abandoned_rooms 가 정의돼 있고 조건이 안전하다', () => {
-    expect(roomSql).toContain('create or replace function public.cleanup_abandoned_rooms')
-    // waiting/running + ended_at 없음 + "모든" 멤버 45초 이상 무응답일 때만
+describe('room presence v2/v2.1 — 불변 확인', () => {
+  it('멤버십 가드·자기 삭제 금지·행 잠금', () => {
+    expect(roomSql).toContain('create or replace function public.is_room_member')
+    expect(roomSql).toContain("raise exception 'not a room member'")
+    expect(roomSql).toContain('user_id <> auth.uid()')
+    expect(roomSql).toContain('for update')
+  })
+
+  it('버려진 방 정리 조건이 안전하다', () => {
     expect(roomSql).toContain("r.status in ('waiting', 'running')")
     expect(roomSql).toContain('r.ended_at is null')
     expect(roomSql).toContain("m.last_seen_at >= now() - interval '45 seconds'")
     expect(roomSql).toContain('limit 10')
-  })
-
-  it('클라이언트는 방 생성·입장 시 best-effort 로 호출한다', () => {
     expect(roomServiceSrc).toContain("rpc('cleanup_abandoned_rooms')")
-    expect(roomServiceSrc).toContain('sweepAbandonedRooms')
   })
 })

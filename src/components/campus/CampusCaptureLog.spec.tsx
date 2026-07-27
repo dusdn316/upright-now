@@ -13,6 +13,7 @@ const TILE: CampusTile = {
   x: 3,
   y: 3,
   zone: 'library',
+  name: '테스트 도서관',
   ownerSchoolId: 'snu',
   challengerSchoolId: null,
   defenseScore: 240,

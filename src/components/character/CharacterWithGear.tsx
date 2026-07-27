@@ -99,10 +99,30 @@ function GearLayer({
   )
 }
 
-export function CharacterWithGear(props: CharacterViewportProps) {
+export interface CharacterWithGearProps extends CharacterViewportProps {
+  /** 상점 미리보기 — 이 아이템을 착용한 모습으로 그립니다 (store 불변) */
+  previewJacketId?: string | null
+  previewBackpackId?: string | null
+  /** true 면 현재 장착 아이템을 무시하고 preview 만 그립니다 */
+  ignoreCurrentlyEquipped?: boolean
+}
+
+export function CharacterWithGear({
+  previewJacketId,
+  previewBackpackId,
+  ignoreCurrentlyEquipped,
+  ...props
+}: CharacterWithGearProps) {
+  // 읽기 전용 구독 — preview 렌더는 inventory/equipped 를 절대 바꾸지 않습니다.
   const equipped = useProgressionStore((s) => s.equipped)
-  const jacket = getShopItem(equipped.jacketId)
-  const backpack = getShopItem(equipped.backpackId)
+  const jacketId = ignoreCurrentlyEquipped
+    ? (previewJacketId ?? null)
+    : (previewJacketId ?? equipped.jacketId)
+  const backpackId = ignoreCurrentlyEquipped
+    ? (previewBackpackId ?? null)
+    : (previewBackpackId ?? equipped.backpackId)
+  const jacket = getShopItem(jacketId ?? undefined)
+  const backpack = getShopItem(backpackId ?? undefined)
   const campusTheme = useCampusTheme()
   const size = props.size ?? 200
   const badge = Math.max(24, Math.round(size * 0.14))

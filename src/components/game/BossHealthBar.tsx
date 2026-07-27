@@ -42,7 +42,8 @@ export function BossHealthBar({
     <div className="flex items-center gap-4">
       <div
         className={[
-          'relative flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl border-2 text-center',
+          // 승인 괴물 이미지가 HP UI 에 비해 작아 보이지 않도록 슬롯 96~108px
+          'relative flex h-[100px] w-[100px] shrink-0 flex-col items-center justify-center rounded-2xl border-2 text-center',
           phase === 'defeated'
             ? 'border-line bg-canvas text-muted'
             : phase === 'rage'
@@ -58,7 +59,7 @@ export function BossHealthBar({
             phase={monsterPhase ?? 1}
             visual={phase === 'defeated' ? 'defeated' : 'idle'}
             hitTick={hit ? attackTick : 0}
-            size={44}
+            size={92}
           />
         ) : (
           <>

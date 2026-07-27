@@ -6,7 +6,11 @@ import { CAMPUS_COPY, CAMPUS_ZONE_META } from '@/constants/campus'
 import { ROUTES } from '@/constants/routes'
 import { useCampusScreen } from '@/features/campus/useCampusScreen'
 import { useCampusThemeStore } from '@/features/campus/campusThemeStore'
-import { CampusBackdrop, CampusUnofficialNotice } from '@/components/campus/CampusBits'
+import {
+  CampusBackdrop,
+  CampusConnectionBadge,
+  CampusUnofficialNotice,
+} from '@/components/campus/CampusBits'
 import {
   CampusCaptureLog,
   CampusSeasonBar,
@@ -94,6 +98,7 @@ export function CampusMap() {
         action={
           <div className="flex items-center gap-2">
             {isExamPeriod && <Badge tone="yellow">시험기간 배경</Badge>}
+            <CampusConnectionBadge />
             <Button size="sm" variant="secondary" onClick={() => navigate(ROUTES.campus)}>
               캠퍼스로
             </Button>

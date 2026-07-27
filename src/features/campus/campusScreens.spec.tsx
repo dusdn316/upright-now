@@ -28,7 +28,7 @@ const { useCampusThemeStore } = await import('./campusThemeStore')
 const { disposeCampus } = await import('./campusStore')
 const { resetMockCampusForTest } = await import('./mockRepository')
 const { useDemoStore } = await import('@/features/demo/demoMode')
-const { ISLAND_SHAPES } = await import('./islandMap')
+const { CAMPUS_GRID_CELLS } = await import('./campusGridOverlay')
 
 function renderAt(path: string) {
   return render(
@@ -114,12 +114,13 @@ describe('캠퍼스 화면 (플래그 ON)', () => {
     expect(useCampusThemeStore.getState().customColor).toBe('#7A4FA3')
   })
 
-  it('/campus 에 섬 지도 36 territory 와 비공식 프로토타입 안내가 있다', async () => {
+  it('/campus 에 96칸 지도와 비공식 프로토타입 안내가 있다', async () => {
     useCampusThemeStore.getState().selectSchool('snu')
     renderAt('/campus')
 
     expect(await screen.findByTestId('territory-map')).toBeInTheDocument()
-    expect(screen.getAllByTestId('territory-tile')).toHaveLength(ISLAND_SHAPES.length)
+    expect(screen.getAllByTestId('territory-tile')).toHaveLength(CAMPUS_GRID_CELLS.length)
+    expect(CAMPUS_GRID_CELLS).toHaveLength(96)
     expect(screen.getAllByTestId('campus-unofficial-notice').length).toBeGreaterThan(0)
     expect(screen.getByText('내 학교')).toBeInTheDocument()
     expect(screen.getByText('이번 시즌')).toBeInTheDocument()

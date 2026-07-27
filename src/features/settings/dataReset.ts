@@ -13,6 +13,8 @@ import { useCampusThemeStore } from '@/features/campus/campusThemeStore'
 import { resetContributionLedgerForTest } from '@/features/campus/recordContribution'
 import { disposeCampus } from '@/features/campus/campusStore'
 import { resetCampusMemberIdForTest } from '@/features/campus/identity'
+import { resetOutboxForTest } from '@/features/campus/outbox'
+import { useCampusDirectoryStore } from '@/features/campus/directoryStore'
 import { useModeStore } from '@/features/modes/modeStore'
 
 /**
@@ -41,6 +43,8 @@ export function resetAllData(): void {
   useCampusThemeStore.getState().reset()
   resetContributionLedgerForTest()
   resetCampusMemberIdForTest()
+  resetOutboxForTest()
+  useCampusDirectoryStore.getState().reset()
   disposeCampus()
   // 주의: mock 영토 저장소(resetMockCampusForTest)는 여기서 비우지 않습니다.
   // mock 은 서버 역할이라 초기화 후에도 eventId 를 기억해 같은 이벤트의

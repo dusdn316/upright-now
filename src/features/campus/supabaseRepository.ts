@@ -1,11 +1,15 @@
-import type { RealtimeChannel } from '@supabase/supabase-js'
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js'
 import { ensureAnonymousUser, getSupabase } from '@/lib/supabase/client'
 import { CONTRIBUTION_POINTS, withNormalizedScore } from './contribution'
 import { countTilesBySchool } from './territory'
+import { CAMPUS_GRID_SEED } from './campusGridOverlay'
+import { useCampusDirectoryStore } from './schoolDirectory'
 import type { CampusRepository, CampusSubmitResult } from './repository'
 import type {
   CampusArchivedSeason,
   CampusContributionEvent,
+  CampusRealtimeStatus,
+  CampusSchoolDirectoryEntry,
   CampusSchoolStanding,
   CampusSeason,
   CampusSnapshot,
@@ -14,17 +18,22 @@ import type {
 } from './types'
 
 /**
- * Supabase 저장소 — supabase/campus_territory_migration.sql 과 짝을 이룹니다.
+ * Supabase 저장소 — supabase/migrations/20260727_campus_final_grid_realtime.sql
+ * 과 짝을 이룹니다.
  *
- * 이 파일은 migration 을 적용한 프로젝트에서만 동작합니다.
- * Production Supabase 에는 migration 을 적용하지 않았으므로, 기본 경로는 mock 입니다.
- * (campusStore 가 `VITE_ENABLE_CAMPUS_SUPABASE` 없이는 mock 을 씁니다.)
- *
- * 전송하는 것: 학교 id · 시즌 id · 타일 id · 기여 종류 · 점수뿐입니다.
+ * 전송하는 것: 학교 id · 시즌 id · 영토 id · 기여 종류 · eventId · sessionId 뿐.
  * 카메라 영상·프레임·랜드마크·자세 좌표·`bad` 상태는 전송하지 않습니다.
+ *
+ * Realtime 규약(§6):
+ * - 익명 로그인 → access token 을 realtime 소켓에 setAuth → 구독.
+ *   (JWT 없는 소켓은 RLS 테이블의 postgres_changes 를 받지 못합니다)
+ * - SUBSCRIBED 확인 후에만 connected 를 알립니다.
+ * - CHANNEL_ERROR/TIMED_OUT/CLOSED → 지수 backoff 재구독, 성공 시 전체 reload.
+ * - live 모드에서 mock 으로 자동 전환하지 않습니다(캠퍼스 스토어 참조).
  */
-/** 최종 지도까지 함께 불러올 보관 시즌 수 */
 const ARCHIVED_DETAIL_LIMIT = 3
+const RECONNECT_BASE_MS = 1000
+const RECONNECT_MAX_MS = 30_000
 
 interface TileRow {
   id: string
@@ -32,6 +41,7 @@ interface TileRow {
   x: number
   y: number
   zone: string
+  name?: string | null
   owner_school_id: string | null
   challenger_school_id: string | null
   defense_score: number
@@ -64,13 +74,25 @@ interface StandingRow {
   tiles: number
 }
 
+interface DirectoryRow {
+  id: string
+  display_name: string
+  short_name: string
+  color: string
+  is_custom: boolean
+}
+
+const seedByXY = new Map(CAMPUS_GRID_SEED.map((s) => [`${s.x},${s.y}`, s]))
+
 function toTile(row: TileRow): CampusTile {
+  const seed = seedByXY.get(`${row.x},${row.y}`)
   return {
     id: row.id,
     seasonId: row.season_id,
     x: row.x,
     y: row.y,
-    zone: row.zone as CampusTile['zone'],
+    zone: (row.zone || seed?.zone || 'lawn') as CampusTile['zone'],
+    name: row.name ?? seed?.name ?? `${row.y + 1}행 ${row.x + 1}열`,
     ownerSchoolId: row.owner_school_id,
     challengerSchoolId: row.challenger_school_id,
     defenseScore: row.defense_score,
@@ -101,23 +123,39 @@ function toTileEvent(row: TileEventRow): CampusTileEvent {
   }
 }
 
+function toDirectoryEntry(row: DirectoryRow): CampusSchoolDirectoryEntry {
+  return {
+    id: row.id,
+    displayName: row.display_name,
+    shortName: row.short_name,
+    color: row.color,
+    isCustom: Boolean(row.is_custom),
+  }
+}
+
 export class SupabaseCampusRepository implements CampusRepository {
   readonly kind = 'supabase' as const
 
   private channel: RealtimeChannel | null = null
   private listeners = new Set<(snapshot: CampusSnapshot) => void>()
+  private statusListeners = new Set<
+    (status: CampusRealtimeStatus, meta?: { lastEventAt?: number }) => void
+  >()
   private last: CampusSnapshot | null = null
-  /**
-   * 보관 시즌은 더 이상 변하지 않으므로 한 번만 불러옵니다.
-   * Realtime 갱신마다 지난 시즌 타일을 다시 조회하지 않기 위한 캐시입니다.
-   */
   private archivedCache: { key: string; value: CampusArchivedSeason[] } | null = null
+  private reconnectAttempts = 0
+  private reconnectTimer: number | null = null
+  private disposed = false
+
+  private emitStatus(status: CampusRealtimeStatus, meta?: { lastEventAt?: number }): void {
+    for (const cb of this.statusListeners) cb(status, meta)
+  }
 
   async load(): Promise<CampusSnapshot> {
     const supabase = await getSupabase()
     if (!supabase) throw new Error('supabase-not-configured')
     await ensureAnonymousUser()
-    // 시즌 자동 전환 — 14일 경계에서도 새 시즌·36영토가 준비됩니다.
+    // 시즌 자동 전환 — 14일 경계에서도 새 시즌·96영토가 준비됩니다.
     try {
       await supabase.rpc('ensure_active_campus_season')
     } catch {
@@ -139,7 +177,7 @@ export class SupabaseCampusRepository implements CampusRepository {
       supabase
         .from('campus_territories')
         .select(
-          'id, season_id, x, y, zone, owner_school_id, challenger_school_id, defense_score, challenge_score, updated_at',
+          'id, season_id, x, y, zone, name, owner_school_id, challenger_school_id, defense_score, challenge_score, updated_at',
         )
         .eq('season_id', season.id),
       supabase
@@ -158,6 +196,9 @@ export class SupabaseCampusRepository implements CampusRepository {
         .limit(8),
     ])
 
+    // 조용한 실패 금지 — 타일 조회가 실패하면 snapshot 을 만들지 않습니다.
+    if (tiles.error) throw new Error('tiles-load-failed:' + tiles.error.code)
+
     const tileList = ((tiles.data ?? []) as TileRow[]).map(toTile)
     const tileCounts = countTilesBySchool(tileList)
     const standingList: CampusSchoolStanding[] = (
@@ -171,8 +212,6 @@ export class SupabaseCampusRepository implements CampusRepository {
       }),
     )
 
-    // 보관된 시즌은 최종 지도와 학교별 기여도까지 함께 불러옵니다.
-    // 개수를 제한하고 캐시해 Realtime 갱신마다 다시 조회하지 않습니다.
     const archivedRows = ((archived.data ?? []) as SeasonRow[]).slice(
       0,
       ARCHIVED_DETAIL_LIMIT,
@@ -189,7 +228,7 @@ export class SupabaseCampusRepository implements CampusRepository {
             supabase
               .from('campus_territories')
               .select(
-                'id, season_id, x, y, zone, owner_school_id, challenger_school_id, defense_score, challenge_score, updated_at',
+                'id, season_id, x, y, zone, name, owner_school_id, challenger_school_id, defense_score, challenge_score, updated_at',
               )
               .eq('season_id', archivedSeason.id),
             supabase.rpc('campus_season_standings', { p_season_id: archivedSeason.id }),
@@ -225,32 +264,157 @@ export class SupabaseCampusRepository implements CampusRepository {
     return snapshot
   }
 
-  subscribe(listener: (snapshot: CampusSnapshot) => void): () => void {
-    this.listeners.add(listener)
+  /** 안전한 학교 디렉터리 — 신 테이블 우선, 마이그레이션 전이면 기존 뷰 */
+  async loadDirectory(): Promise<CampusSchoolDirectoryEntry[]> {
+    const supabase = await getSupabase()
+    if (!supabase) return []
+    await ensureAnonymousUser()
+    const fromTable = await supabase
+      .from('campus_school_directory_entries')
+      .select('id, display_name, short_name, color, is_custom')
+    if (!fromTable.error) {
+      return ((fromTable.data ?? []) as DirectoryRow[]).map(toDirectoryEntry)
+    }
+    const fromView = await supabase
+      .from('campus_school_directory')
+      .select('id, display_name, short_name, color, is_custom')
+    if (fromView.error) return []
+    return ((fromView.data ?? []) as DirectoryRow[]).map(toDirectoryEntry)
+  }
 
-    if (!this.channel) {
-      void (async () => {
-        const supabase = await getSupabase()
-        if (!supabase) return
-        this.channel = supabase
-          .channel('campus-territory')
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'campus_territories' },
-            () => void this.refresh(),
-          )
-          .on(
-            'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'campus_territory_events' },
-            () => void this.refresh(),
-          )
-          .subscribe()
-      })()
+  async fetchMyMembership(): Promise<{ schoolId: string } | null> {
+    const supabase = await getSupabase()
+    if (!supabase) return null
+    await ensureAnonymousUser()
+    const { data, error } = await supabase.rpc('campus_my_membership')
+    if (error) return null
+    const row = data as { school_id?: string | null } | null
+    return row?.school_id ? { schoolId: row.school_id } : null
+  }
+
+  subscribe(
+    listener: (snapshot: CampusSnapshot) => void,
+    onStatus?: (status: CampusRealtimeStatus, meta?: { lastEventAt?: number }) => void,
+  ): () => void {
+    this.listeners.add(listener)
+    if (onStatus) this.statusListeners.add(onStatus)
+
+    if (!this.channel && !this.reconnectTimer) {
+      this.emitStatus('connecting')
+      void this.connect()
     }
 
     return () => {
       this.listeners.delete(listener)
+      if (onStatus) this.statusListeners.delete(onStatus)
     }
+  }
+
+  /**
+   * §6-A 초기화 순서: 익명 로그인 → 세션 토큰 → realtime.setAuth → 구독.
+   * 인증 전 unauthenticated 채널을 먼저 열지 않습니다.
+   */
+  private async connect(): Promise<void> {
+    if (this.disposed) return
+    const supabase = await getSupabase()
+    if (!supabase) {
+      this.emitStatus('error')
+      return
+    }
+    try {
+      await ensureAnonymousUser()
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (token) supabase.realtime.setAuth(token)
+      this.openChannel(supabase)
+    } catch {
+      this.scheduleReconnect()
+    }
+  }
+
+  private openChannel(supabase: SupabaseClient): void {
+    if (this.disposed) return
+    // 중복 채널 0 — 기존 채널을 반드시 정리하고 새로 엽니다.
+    if (this.channel) {
+      void supabase.removeChannel(this.channel)
+      this.channel = null
+    }
+
+    const onEvent = () => {
+      this.emitStatus('connected', { lastEventAt: Date.now() })
+      void this.refresh()
+    }
+
+    this.channel = supabase
+      .channel('campus-territory')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'campus_territories' },
+        onEvent,
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'campus_territory_events' },
+        onEvent,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'campus_school_directory_entries' },
+        (payload) => {
+          // 디렉터리는 전체 reload 없이 그 자리에서 반영합니다.
+          const store = useCampusDirectoryStore.getState()
+          if (payload.eventType === 'DELETE') {
+            const old = payload.old as { id?: string }
+            if (old?.id) store.removeEntry(old.id)
+          } else {
+            const row = payload.new as DirectoryRow
+            if (row?.id) store.upsertEntry(toDirectoryEntry(row))
+          }
+          this.emitStatus('connected', { lastEventAt: Date.now() })
+        },
+      )
+      .subscribe((status) => {
+        if (this.disposed) return
+        if (status === 'SUBSCRIBED') {
+          const hadFailures = this.reconnectAttempts > 0
+          this.reconnectAttempts = 0
+          this.emitStatus('connected')
+          // 재연결 성공 — 끊긴 동안 놓친 변화를 전체 snapshot 으로 복구
+          if (hadFailures) void this.refresh()
+        } else if (
+          status === 'CHANNEL_ERROR' ||
+          status === 'TIMED_OUT' ||
+          status === 'CLOSED'
+        ) {
+          this.scheduleReconnect()
+        }
+      })
+  }
+
+  private scheduleReconnect(): void {
+    if (this.disposed || this.reconnectTimer) return
+    this.reconnectAttempts += 1
+    const delay = Math.min(
+      RECONNECT_MAX_MS,
+      RECONNECT_BASE_MS * 2 ** Math.min(this.reconnectAttempts - 1, 5),
+    )
+    this.emitStatus(
+      typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'reconnecting',
+    )
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null
+      void this.connect()
+    }, delay)
+  }
+
+  /** 브라우저 online/focus 복귀 등에서 즉시 재연결을 시도합니다. */
+  reconnectNow(): void {
+    if (this.disposed) return
+    if (this.reconnectTimer) {
+      window.clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    void this.connect()
   }
 
   private async refresh(): Promise<void> {
@@ -258,7 +422,11 @@ export class SupabaseCampusRepository implements CampusRepository {
       const snapshot = await this.load()
       for (const listener of this.listeners) listener(snapshot)
     } catch {
-      // 실시간 갱신 실패는 조용히 넘어갑니다. 다음 이벤트에서 다시 시도합니다.
+      /*
+        조용히 삼키지 않습니다 — 마지막 snapshot 은 유지하되 상태를 알립니다.
+        다음 이벤트·reconnect·online/focus refresh 에서 다시 시도합니다.
+      */
+      this.emitStatus('error')
       if (this.last) for (const listener of this.listeners) listener(this.last)
     }
   }
@@ -269,11 +437,10 @@ export class SupabaseCampusRepository implements CampusRepository {
     await ensureAnonymousUser()
 
     /*
-      원자적 RPC (v2) — eventId 멱등성·영토 점령 판정을 서버가 처리합니다.
-      학교(school_id)와 멤버 해시는 클라이언트가 보내지 않습니다:
-      서버가 auth.uid() 의 campus_memberships 에서 조회해 위조를 차단합니다.
+      원자적 RPC (v3) — eventId 멱등성·점령 판정·모든 상한을 서버가 처리하고
+      권위값(authoritativeMyContribution·updatedTerritory)을 함께 돌려줍니다.
+      학교·멤버·점수는 클라이언트가 보내지 않습니다.
     */
-    // 점수는 서버 CASE 가 결정합니다 — 클라이언트는 종류만 보냅니다.
     const { data, error } = await supabase.rpc('apply_campus_contribution', {
       p_event_id: event.eventId,
       p_territory_id: event.tileId ?? null,
@@ -283,21 +450,44 @@ export class SupabaseCampusRepository implements CampusRepository {
 
     if (error) return { accepted: false, points: 0, reason: 'not_ready' }
 
-    const row = data as { result?: string; points?: number } | null
+    const row = data as {
+      result?: string
+      points?: number
+      acceptedPoints?: number
+      authoritativeMyContribution?: number
+      territoryId?: string | null
+      updatedTerritory?: TileRow | null
+      serverTime?: string | null
+    } | null
     const result = row?.result ?? 'not_ready'
     const accepted =
       result === 'accepted' || result === 'captured' ||
-      result === 'contested' || result === 'defended'
+      result === 'contested' || result === 'defended' ||
+      result === 'territory_not_found'
+
+    const permanentRejects = new Set([
+      'duplicate_event', 'duplicate_session', 'daily_cap', 'recovery_cap',
+      'recovery_cooldown', 'no_membership', 'invalid_kind', 'session_required',
+    ])
+
+    const points = row?.acceptedPoints ?? row?.points ?? 0
+
     return {
       accepted,
-      points: accepted ? (row?.points ?? CONTRIBUTION_POINTS[event.kind]) : 0,
+      points: accepted ? (points || CONTRIBUTION_POINTS[event.kind]) : 0,
       captured: result === 'captured',
       contested: result === 'contested',
-      tileId: event.tileId,
+      tileId: row?.territoryId ?? event.tileId,
+      authoritativeMyContribution:
+        typeof row?.authoritativeMyContribution === 'number'
+          ? row.authoritativeMyContribution
+          : undefined,
+      updatedTile: row?.updatedTerritory ? toTile(row.updatedTerritory) : null,
+      serverTime: row?.serverTime ? new Date(row.serverTime).getTime() : undefined,
       reason: accepted
         ? undefined
-        : result === 'duplicate_event'
-          ? 'duplicate_event'
+        : permanentRejects.has(result)
+          ? (result as CampusSubmitResult['reason'])
           : 'not_ready',
     }
   }
@@ -359,8 +549,14 @@ export class SupabaseCampusRepository implements CampusRepository {
   }
 
   dispose(): void {
+    this.disposed = true
     this.listeners.clear()
+    this.statusListeners.clear()
     this.archivedCache = null
+    if (this.reconnectTimer) {
+      window.clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     void this.channel?.unsubscribe()
     this.channel = null
   }

@@ -10,6 +10,7 @@ import { installSoundTriggers } from '@/features/sound/soundTriggers'
 import { installMonsterBridge } from '@/features/game/monsterBridge'
 import { CampusThemeRoot } from '@/components/campus/CampusThemeRoot'
 import { CampusContributionBridge } from '@/features/campus/CampusContributionBridge'
+import { CampusFeedbackToaster } from '@/components/campus/CampusFeedbackToaster'
 import { installCampusDevApi } from '@/features/campus/campusDevApi'
 import { repairProgressionFromHistory } from '@/features/progression/repairProgression'
 
@@ -43,6 +44,7 @@ export function App() {
       {/* 캠퍼스 테마 색 주입 · 기여 이벤트 관찰. 플래그가 꺼져 있으면 아무 일도 하지 않습니다. */}
       <CampusThemeRoot />
       <CampusContributionBridge />
+      <CampusFeedbackToaster />
       <AppRoutes />
     </ToastProvider>
   )

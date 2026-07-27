@@ -8,6 +8,10 @@ import {
 import { Badge, Button, TextField } from '@/components/ui'
 import { Icon } from '@/components/ui/Icon'
 import { useCampusThemeStore } from '@/features/campus/campusThemeStore'
+import {
+  listRegisteredCustomSchools,
+  useCampusDirectoryStore,
+} from '@/features/campus/schoolDirectory'
 import { resolveCampusTheme } from '@/features/campus/theme'
 import {
   formatNextAllowed,
@@ -43,6 +47,12 @@ export function SchoolPicker({
   const [message, setMessage] = useState<string | null>(null)
   const [colorDraft, setColorDraft] = useState(customColor)
   const [customFormOpen, setCustomFormOpen] = useState(false)
+  const [schoolSearch, setSchoolSearch] = useState('')
+  const directoryEntries = useCampusDirectoryStore((s) => s.entries)
+  const registeredSchools = useMemo(
+    () => listRegisteredCustomSchools(directoryEntries),
+    [directoryEntries],
+  )
   const saveCustomSchool = useCampusThemeStore((s) => s.saveCustomSchool)
   const syncStatus = useCampusThemeStore((s) => s.syncStatus)
   const canSaveCustom =
@@ -156,7 +166,69 @@ export function SchoolPicker({
         </div>
       </fieldset>
 
-      {/* 기타 / 직접 설정 — 학교 이름 직접 입력 (비공식) */}
+      {/* 사용자 등록 학교 — 다른 사용자가 만든 학교에 같은 이름으로 참여 (§7) */}
+      {isCustomSelected && registeredSchools.length > 0 && (
+        <div className="rounded-2xl border border-line bg-canvas p-3">
+          <p className="text-sm font-bold text-ink">등록된 학교에 참여</p>
+          <p className="mt-0.5 text-[11px] text-ink-soft">
+            이미 등록된 학교는 같은 이름으로 함께 참여할 수 있어요. 표시 정보는
+            처음 등록한 사용자만 바꿀 수 있어요.
+          </p>
+          <input
+            value={schoolSearch}
+            onChange={(e) => setSchoolSearch(e.target.value)}
+            placeholder="학교 이름 검색"
+            aria-label="등록된 학교 검색"
+            className="mt-2 h-9 w-full rounded-xl border border-line bg-surface px-2 text-sm"
+          />
+          <ul className="mt-2 flex max-h-40 flex-col gap-1 overflow-y-auto">
+            {registeredSchools
+              .filter(
+                (e) =>
+                  schoolSearch.trim().length === 0 ||
+                  e.displayName.includes(schoolSearch.trim()) ||
+                  e.shortName.includes(schoolSearch.trim()),
+              )
+              .slice(0, 8)
+              .map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    data-testid="campus-join-registered"
+                    onClick={() => {
+                      setCustomSchoolName(entry.displayName, entry.shortName)
+                      setCustomColor(entry.color)
+                      setColorDraft(entry.color)
+                      const decision = saveCustomSchool(Date.now())
+                      if (!decision.allowed) {
+                        const reason = decision.reason
+                          ? SCHOOL_CHANGE_MESSAGE[decision.reason]
+                          : null
+                        setMessage(reason ?? '지금은 학교를 바꿀 수 없어요.')
+                        return
+                      }
+                      setMessage(null)
+                      onChanged?.(useCampusThemeStore.getState().schoolId ?? '')
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl border border-line bg-surface px-2.5 py-1.5 text-left text-sm hover:bg-canvas"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="inline-block h-3.5 w-3.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: entry.color }}
+                    />
+                    <span className="min-w-0 flex-1 truncate font-semibold text-ink">
+                      {entry.displayName}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-ink-soft">{entry.shortName}</span>
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 기타 / 직접 설정 — 새 학교 등록 (비공식) */}
       {isCustomSelected && (
         <div className="mb-3 flex flex-wrap items-end gap-2 text-sm">
           <label className="flex flex-col gap-1">

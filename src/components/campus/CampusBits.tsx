@@ -3,6 +3,7 @@ import { Icon } from '@/components/ui/Icon'
 import { CAMPUS_COPY, CAMPUS_PATTERN_LABEL } from '@/constants/campus'
 import { featureFlags } from '@/lib/feature-flags/flags'
 import { useCampusTheme } from '@/features/campus/campusThemeStore'
+import { useCampusStore } from '@/features/campus/campusStore'
 import type { CampusPatternId, CampusThemeTokens } from '@/features/campus/types'
 
 /**
@@ -180,5 +181,62 @@ export function CampusColorSourceNote({ theme }: { theme: CampusThemeTokens }) {
         : CAMPUS_COPY.colorSourcePreset}
       {` (${theme.colorLabel} · ${CAMPUS_PATTERN_LABEL[theme.pattern]} 패턴)`}
     </p>
+  )
+}
+
+/**
+ * 연결 상태 배지 — 저장소 종류가 아니라 **실제 Realtime 구독 상태**를
+ * 표시합니다(§6-C). mock 은 로컬 미리보기임을 그대로 밝힙니다.
+ */
+export function CampusConnectionBadge() {
+  const source = useCampusStore((s) => s.source)
+  const realtimeStatus = useCampusStore((s) => s.realtimeStatus)
+  const pending = useCampusStore((s) => s.pendingContributionCount)
+
+  if (source === 'mock') {
+    return (
+      <span
+        data-testid="campus-connection"
+        data-connection="mock"
+        className="inline-flex items-center rounded-full bg-canvas px-2.5 py-1 text-[11px] font-bold text-ink-soft"
+      >
+        로컬 미리보기 (mock)
+      </span>
+    )
+  }
+
+  const label =
+    realtimeStatus === 'connected'
+      ? '실시간 연결됨'
+      : realtimeStatus === 'reconnecting'
+        ? '다시 연결하는 중…'
+        : realtimeStatus === 'offline'
+          ? pending > 0
+            ? `오프라인 · 기여 ${pending}건 대기`
+            : '오프라인'
+          : realtimeStatus === 'error'
+            ? '동기화 오류 · 재시도 중'
+            : '연결하는 중…'
+  const toneClass =
+    realtimeStatus === 'connected'
+      ? 'bg-green-soft text-[#1E6B45]'
+      : realtimeStatus === 'reconnecting' || realtimeStatus === 'connecting'
+        ? 'bg-yellow-soft text-[#8a6b12]'
+        : 'bg-coral-soft text-[#B8285A]'
+
+  return (
+    <output
+      data-testid="campus-connection"
+      data-connection={realtimeStatus}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${toneClass}`}
+    >
+      <span
+        aria-hidden="true"
+        className={`inline-block h-2 w-2 rounded-full ${
+          realtimeStatus === 'connected' ? 'bg-[#2FA470]' : 'bg-current'
+        }`}
+      />
+      {label}
+    </output>
   )
 }

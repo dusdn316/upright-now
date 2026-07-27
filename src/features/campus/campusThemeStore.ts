@@ -3,6 +3,7 @@ import { loadLocal, saveLocal, STORAGE_KEYS } from '@/lib/storage/local'
 import { useDemoStore } from '@/features/demo/demoMode'
 import { CUSTOM_DEFAULT_COLOR } from '@/constants/campus'
 import { normalizeHexColor, resolveCampusTheme } from './theme'
+import { useCampusDirectoryStore } from './directoryStore'
 import { seasonAt } from './season'
 import {
   applySchoolChange,
@@ -49,6 +50,19 @@ interface CampusThemeState extends CampusThemePersisted {
   setCustomColor: (color: string) => boolean
   /** 기타 학교 이름 설정 — sanitize 후 저장. 학교 변경 제한과 무관 */
   setCustomSchoolName: (name: string, shortName: string) => void
+  /**
+   * 서버 membership 복원 전용(다른 기기·localStorage 유실) —
+   * 변경 이력·쿨다운을 소모하지 않고 서버 학교를 채택합니다.
+   */
+  adoptServerSchool: (
+    schoolId: string,
+    entry: {
+      displayName: string
+      shortName: string
+      color: string
+      isCustom: boolean
+    } | null,
+  ) => void
   setTargetTile: (tileId: string | null) => void
   /** 지금 학교를 바꿀 수 있는지 미리 확인합니다. */
   checkChange: (schoolId: string, now?: number) => SchoolChangeDecision
@@ -265,6 +279,25 @@ export const useCampusThemeStore = create<CampusThemeState>((set, get) => ({
     return decision
   },
 
+  adoptServerSchool: (schoolId, entry) => {
+    const next: CampusThemePersisted = {
+      ...get(),
+      schoolId,
+      customSchoolName: entry?.isCustom ? sanitizeSchoolName(entry.displayName, 30) : get().customSchoolName,
+      customSchoolShortName: entry?.isCustom
+        ? sanitizeSchoolName(entry.shortName, 8)
+        : get().customSchoolShortName,
+      customColor:
+        entry?.isCustom && normalizeHexColor(entry.color)
+          ? normalizeHexColor(entry.color)!
+          : get().customColor,
+      targetTileId: null,
+    }
+    set(next)
+    persist(next)
+    set({ syncNotice: '이 기기에서 서버의 학교 선택을 복원했어요.', syncStatus: 'ok' })
+  },
+
   setCustomSchoolName: (name, shortName) => {
     const next = {
       ...get(),
@@ -299,15 +332,58 @@ export const useCampusThemeStore = create<CampusThemeState>((set, get) => ({
   },
 }))
 
+/**
+ * 커스텀 학교 토큰에 실제 이름·짧은 이름을 입힙니다.
+ * 우선순위: 서버 디렉터리 → 내 로컬 입력 → (마지막) 프리셋 일반명.
+ * "직접 설정"·stable key 가 화면에 노출되지 않게 하는 단일 지점입니다.
+ */
+function withCustomIdentity(
+  tokens: CampusThemeTokens | null,
+  schoolId: string | null,
+  localName: string,
+  localShort: string,
+): CampusThemeTokens | null {
+  if (!tokens || !schoolId?.startsWith('custom')) return tokens
+  const entry = useCampusDirectoryStore.getState().entries[schoolId]
+  const name =
+    entry?.displayName && entry.displayName.trim().length >= 2
+      ? entry.displayName
+      : localName.trim().length >= 2
+        ? localName
+        : tokens.schoolName
+  const short =
+    entry?.shortName && entry.shortName.trim().length >= 2
+      ? entry.shortName
+      : localShort.trim().length >= 2
+        ? localShort
+        : tokens.short
+  if (name === tokens.schoolName && short === tokens.short) return tokens
+  return { ...tokens, schoolName: name, short }
+}
+
 /** 현재 선택에서 파생된 테마 토큰. 학교를 고르지 않았으면 null. */
 export function selectCampusTheme(state: CampusThemeState): CampusThemeTokens | null {
-  return resolveCampusTheme(state.schoolId, state.customColor)
+  return withCustomIdentity(
+    resolveCampusTheme(state.schoolId, state.customColor),
+    state.schoolId,
+    state.customSchoolName,
+    state.customSchoolShortName,
+  )
 }
 
 export function useCampusTheme(): CampusThemeTokens | null {
   const schoolId = useCampusThemeStore((s) => s.schoolId)
   const customColor = useCampusThemeStore((s) => s.customColor)
-  return resolveCampusTheme(schoolId, customColor)
+  const customSchoolName = useCampusThemeStore((s) => s.customSchoolName)
+  const customSchoolShortName = useCampusThemeStore((s) => s.customSchoolShortName)
+  // 디렉터리 갱신(다른 브라우저의 등록 등)에도 배지가 즉시 따라오게 구독합니다.
+  useCampusDirectoryStore((s) => s.entries)
+  return withCustomIdentity(
+    resolveCampusTheme(schoolId, customColor),
+    schoolId,
+    customSchoolName,
+    customSchoolShortName,
+  )
 }
 
 /** 학교 이름 정리 — HTML 태그·제어문자 제거 */

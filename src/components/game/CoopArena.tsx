@@ -98,11 +98,11 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
           <GearBadges jacketId={equipped.jacketId} backpackId={equipped.backpackId} />
         </div>
 
-        {/* 공동 괴물 */}
-        <div className="flex w-[150px] flex-col items-center" data-testid="coop-boss">
+        {/* 공동 괴물 — 중앙 열 188px · 슬롯 132px · 괴물 116px (§9) */}
+        <div className="flex w-[188px] flex-col items-center" data-testid="coop-boss">
           <div
             className={[
-              'flex h-24 w-24 items-center justify-center rounded-2xl border-2',
+              'flex h-[132px] w-[132px] items-center justify-center rounded-2xl border-2',
               ratio <= 0 ? 'border-line bg-canvas' : 'border-coral bg-pink-soft',
             ].join(' ')}
             aria-hidden="true"
@@ -114,7 +114,7 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
                 theme="komong"
                 phase={1}
                 hitTick={bossHitTick}
-                size={80}
+                size={116}
               />
             )}
           </div>

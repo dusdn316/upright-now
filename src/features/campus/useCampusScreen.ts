@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { initCampus, useCampusStore } from './campusStore'
+import { initCampus, setCampusScreenOpen, useCampusStore } from './campusStore'
 import { useCampusThemeStore } from './campusThemeStore'
 import { rankStandings } from './contribution'
 import { seasonAt } from './season'
@@ -17,11 +17,21 @@ export function useCampusScreen() {
   const source = useCampusStore((s) => s.source)
   const stored = useCampusStore((s) => s.snapshot)
   const errorMessage = useCampusStore((s) => s.errorMessage)
+  const realtimeStatus = useCampusStore((s) => s.realtimeStatus)
+  const pendingContributionCount = useCampusStore((s) => s.pendingContributionCount)
+  const lastAcceptedAt = useCampusStore((s) => s.lastAcceptedAt)
+  const lastSyncedAt = useCampusStore((s) => s.lastSyncedAt)
   const schoolId = useCampusThemeStore((s) => s.schoolId)
 
   useEffect(() => {
     void initCampus()
   }, [schoolId])
+
+  // 캠퍼스 화면이 열려 있는 동안만 Realtime 미연결 폴백 polling 이 돕니다.
+  useEffect(() => {
+    setCampusScreenOpen(true)
+    return () => setCampusScreenOpen(false)
+  }, [])
 
   // 첫 로딩 중에도 레이아웃이 흔들리지 않도록 빈 지도를 씁니다.
   const snapshot: CampusSnapshot = useMemo(() => {
@@ -46,5 +56,17 @@ export function useCampusScreen() {
 
   const standings = useMemo(() => rankStandings(snapshot.standings), [snapshot.standings])
 
-  return { status, source, snapshot, standings, myTiles, schoolId, errorMessage }
+  return {
+    status,
+    source,
+    snapshot,
+    standings,
+    myTiles,
+    schoolId,
+    errorMessage,
+    realtimeStatus,
+    pendingContributionCount,
+    lastAcceptedAt,
+    lastSyncedAt,
+  }
 }

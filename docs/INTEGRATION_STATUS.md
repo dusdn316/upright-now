@@ -297,3 +297,86 @@ CAMPUS_SUPABASE=true · room heartbeat/stale cleanup · custom school 공유
 - 스모크 테스트 데이터 정리 SQL 은 완료 보고의 FINAL_SMOKE_CLEANUP_SQL
   (1회용, 마이그레이션 아님 — custom-b0b1e57 관련 데이터만 제거)
 - main 병합·Production 배포는 수동 검증(체크리스트 A~G) 승인 후 진행.
+
+## 2026-07-27 RC2 스프린트 — §2 원인 감사 결과
+
+수정 전 코드 추적으로 확인한 실제 원인 (커밋 c8017b8 기준 행 번호):
+
+1. **내 기여도 즉시 갱신 안 됨** — `recordContribution.ts` 가
+   `submitContribution` 성공 후 store 를 전혀 갱신하지 않고 결과만 반환.
+   화면 갱신은 Realtime → `refresh()` 에만 의존하는데, 아래 2번 때문에
+   Realtime 이벤트가 오지 않아 새로고침 전까지 stale.
+2. **Realtime 실질 미동작** — `SupabaseCampusRepository.subscribe()` 가
+   익명 로그인·`realtime.setAuth()` 없이 채널을 열고,
+   `campusStore.initCampus()` 는 subscribe(122행)를 load(125행, 내부에서
+   익명 로그인)보다 먼저 실행. RLS 가 걸린 postgres_changes 는 JWT 없는
+   소켓에 이벤트를 주지 않음(라이브에서 재현·확인). SUBSCRIBED/에러 상태
+   콜백·재연결·백오프 없음. `refresh()` 실패는 빈 catch 로 침묵.
+3. **live 모드 mock 자동 fallback** — `initCampus()` catch 가 Supabase
+   load 실패 시 조용히 `MockCampusRepository` 로 전환(126~143행).
+   mock 점수가 실시간처럼 보이는 오인 유발.
+4. **mock ledger 가 live 기여 차단 가능** — `recordContribution` 이 서버
+   호출 전에 로컬 ledger(`evaluateContribution`)로 선차단. ledger 에
+   source/season 구분이 없어 mock 시절 eventId·sessionKey·dailyTotals 가
+   Supabase 모드 이벤트를 duplicate/daily_cap 으로 오판할 수 있음.
+5. **기여 유실** — `not_ready`(오프라인·초기화 전·일시 오류)면 rollback 후
+   이벤트가 영구 소실. 재전송 큐(outbox) 없음.
+6. **커스텀 학교 타 사용자 표시 불가** — 이름·짧은 이름·색이 본인
+   localStorage(campusThemeStore)에만 존재. 타 사용자 화면은
+   `getSchoolPreset(custom-…)` 실패 → '기타 학교'·기본색으로 표시
+   (`TerritoryMap.schoolShortName/useSchoolColor`). 서버에는
+   campus_school_directory 뷰가 있으나 클라이언트가 조회하지 않고
+   Realtime 전파도 없음(뷰는 publication 불가 → 실테이블 필요).
+7. **지도 36/96 불일치** — mock `createSeasonMap` 은 96타일 생성, 서버
+   seed·오버레이(SPOTS)는 36개. `TerritoryMap` 은 shape 가 있는 36개만
+   렌더. `islandMap` jitter/blob 폴리곤은 배경 이미지의 실제 12×8 칸과
+   무관하게 생성되어 흰 경계선과 어긋남.
+
+## 2026-07-27 RC2 PHASE A — 구현 요약
+
+- **96칸 실측 그리드**: 배경(campus-map-bg-1536.webp)의 흰 길 경계를 sharp
+  투영 프로파일로 실측(개발 시에만, 런타임 이미지 분석 없음).
+  이미지의 실제 구조는 "상단 장식 테두리 행 1개 + 8행 × (기본 10열 +
+  우측 부분 열)"로, 균일한 12×8 이 아니다. 논리 모델 12×8=96(id 계약
+  고정)을 다음 매핑으로 도면에 정렬했다: 실측 10열 + 최광폭 열(859~985)
+  분할 + 우측 부분 열(1297~1385) = 12열, 상단 장식 행을 제외한 실측
+  8행(198~868). 분할선 x=922(0~2행 한정)만 인위 경계이고 3~8행은 실측
+  내부 선(~899)에 스냅됨. 대역별 국소 피크 보정(±10px 클램프)으로
+  사다리꼴 quad 를 만들고 흰 길 안쪽 7px inset. 검증 캡처는
+  artifacts/final-campus-grid/ (번호 캡처 포함).
+- **단일 seed manifest**: campusGridSeedManifest.json(96) 을 UI overlay ·
+  mock createSeasonMap · 최종 SQL seed 가 공유(parity 스펙 고정).
+  기존 36 territory 의 (x,y)·zone·이름 완전 보존, 신규 60개는 인접
+  zone 승계 + 시스템 명명. islandMap(jitter/blob)·구 36 manifest 삭제.
+- **기여 파이프라인**: apply v3 가 authoritativeMyContribution ·
+  updatedTerritory · serverTime · acceptedPoints 를 반환하고, 클라이언트는
+  RPC 성공 즉시 store 에 권위값 반영(Realtime 대기 없음) 후 background
+  refresh. durable outbox(campus-outbox, 이벤트 즉시 적재 → 수락/영구
+  거절 시 제거, 일시 실패 재시도 · 앱 시작/online/reconnect/화면 진입
+  flush). mock 원장은 v2(schemaVersion·source=mock)로 승계하고 supabase
+  모드는 원장 선차단 없이 서버가 단일 권위(과거 mock 원장이 live 를
+  차단하던 문제 제거). 기여·거절 사유는 토스트로 표시.
+- **Realtime**: 익명 로그인 → realtime.setAuth(JWT) → snapshot load →
+  구독 순서로 교정(무인증 채널이 RLS 이벤트를 못 받던 근본 원인).
+  SUBSCRIBED 확인 후에만 '실시간 연결됨' 배지. CHANNEL_ERROR/TIMED_OUT/
+  CLOSED → 지수 backoff 재구독 + 성공 시 full reload. online/visibility/
+  focus 에서 snapshot refresh + outbox flush. 미연결·화면 열림·visible
+  일 때만 10초 폴백 polling. **live 모드 mock 자동 전환 제거** — 실패 시
+  source=supabase 유지, 마지막 snapshot 보존, 상태·재시도 노출.
+- **안전한 학교 디렉터리**: campus_school_directory_entries 실테이블
+  (created_by 없음, 클라이언트 쓰기 금지, campus_schools trigger 동기화,
+  기존 학교 backfill, publication 등록). 클라이언트는 디렉터리 스토어 +
+  단일 resolver(서버 → 프리셋 → 로컬 → '알 수 없는 학교')로 전 화면
+  (지도 fill·범례·순위·상세·배지·카드·방 배너·공유·설정) 이름·색 통일.
+  stable key·"직접 설정" 문자열은 화면 노출 금지. campus_my_membership
+  RPC 로 다른 기기에서 서버 학교 복원. 학교 선택 화면에 "등록된 학교
+  검색·참여" 섹션 추가.
+- **상점·괴물**: 상점 9개 카드가 구매 전에도 현재 단계 캐릭터가 해당
+  아이템만 착용한 실제 이미지(GearPreview override, store 불변 스펙 고정).
+  괴물 3종은 투명 여백 실측(alpha bbox) contentScale 로 보정하고
+  BossHealthBar 슬롯 100px/괴물 92px, CoopArena 중앙 188px/슬롯 132px/
+  괴물 116px 로 확대(원본 WebP 불변).
+- **최종 SQL**: supabase/migrations/20260727_campus_final_grid_realtime.sql
+  하나로 96 seed(기존 36 보존+60 추가·미래 시즌 96)·디렉터리·apply v3·
+  membership RPC·publication·검증 SELECT·rollback 주석 포함. 멱등.
+  기존 4개 migration 재실행 불필요, 라이브 실행은 PHASE B 대기.

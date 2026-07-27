@@ -30,6 +30,23 @@ export function monsterAssetSrc(theme: MonsterThemeId, phase: number, size: 256 
   return `/assets/monsters/${theme}/phase-${p}/idle-${size}.webp`
 }
 
+/**
+ * 승인 원본(WebP)의 투명 여백 보정 배율 — theme/phase 별 실측값
+ * (sharp 로 alpha bounding box 를 측정, 최대 1.5 캡).
+ * 원본을 재생성·크롭하지 않고 CSS scale 로만 채웁니다.
+ */
+export const MONSTER_CONTENT_SCALE: Record<MonsterThemeId, [number, number, number, number]> = {
+  bookmong: [1.19, 1.07, 1.06, 1.02],
+  // 늘몽이는 납작한 자세라 여백이 특히 큼 (실측 2.67/2.05/2.00/1.77 에서 약간 여유)
+  neulmong: [2.2, 1.9, 1.85, 1.7],
+  komong: [1.5, 1.5, 1.37, 1.15],
+}
+
+function contentScaleOf(theme: MonsterThemeId, phase: number): number {
+  const scales = MONSTER_CONTENT_SCALE[theme]
+  return scales[Math.min(3, Math.max(0, Math.round(phase) - 1))] ?? 1
+}
+
 export function MonsterViewport({
   theme,
   phase,
@@ -87,13 +104,19 @@ export function MonsterViewport({
       aria-hidden="true"
     >
       {!broken ? (
-        <img
-          src={monsterAssetSrc(theme, phase, size > 200 ? 512 : 256)}
-          alt=""
-          draggable={false}
-          onError={() => setBroken(true)}
-          className="monster-img h-full w-full object-contain"
-        />
+        // 내부 wrapper scale 로 투명 여백을 보정합니다 (원본 불변·object-contain 유지)
+        <span
+          className="pointer-events-none absolute inset-0"
+          style={{ transform: `scale(${contentScaleOf(theme, phase)})` }}
+        >
+          <img
+            src={monsterAssetSrc(theme, phase, size > 200 ? 512 : 256)}
+            alt=""
+            draggable={false}
+            onError={() => setBroken(true)}
+            className="monster-img h-full w-full object-contain"
+          />
+        </span>
       ) : (
         <span style={{ fontSize: size * 0.55 }}>{EMOJI_FALLBACK[theme]}</span>
       )}

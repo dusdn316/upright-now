@@ -19,6 +19,7 @@ function tile(overrides: Partial<CampusTile> = {}): CampusTile {
     x: 0,
     y: 0,
     zone: 'lawn',
+    name: '테스트 잔디',
     ownerSchoolId: null,
     challengerSchoolId: null,
     defenseScore: 100,
@@ -37,9 +38,11 @@ describe('가상 캠퍼스 지도', () => {
     expect(new Set(tiles.map((t) => t.id)).size).toBe(MAP_TILE_COUNT)
   })
 
-  it('도서관·광장·강의동·잔디밭·카페 구역이 모두 존재한다', () => {
+  it('8개 구역(도서관·광장·강의동·잔디밭·카페·기숙사·운동장·연못가)이 모두 존재한다', () => {
     const zones = new Set(createSeasonMap('season-1', NOW).map((t) => t.zone))
-    expect([...zones].sort()).toEqual(['cafe', 'lawn', 'lecture', 'library', 'plaza'])
+    expect([...zones].sort()).toEqual([
+      'cafe', 'dorm', 'field', 'lawn', 'lecture', 'library', 'plaza', 'pond',
+    ])
   })
 
   it('구역 배치는 좌표만으로 결정된다', () => {

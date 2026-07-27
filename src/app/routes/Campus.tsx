@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { AppShell, PageHeader } from '@/components/layout/AppShell'
-import { Badge, Button, Card, CardTitle } from '@/components/ui'
+import { Button, Card, CardTitle } from '@/components/ui'
 import { Icon } from '@/components/ui/Icon'
 import { CAMPUS_COPY } from '@/constants/campus'
 import { ROUTES } from '@/constants/routes'
@@ -8,6 +8,7 @@ import { useCampusScreen } from '@/features/campus/useCampusScreen'
 import { useCampusTheme } from '@/features/campus/campusThemeStore'
 import {
   CampusBackdrop,
+  CampusConnectionBadge,
   CampusSchoolBadge,
   CampusUnofficialNotice,
 } from '@/components/campus/CampusBits'
@@ -30,7 +31,15 @@ import { SchoolPicker } from '@/components/campus/SchoolPicker'
 export function Campus() {
   const navigate = useNavigate()
   const theme = useCampusTheme()
-  const { snapshot, standings, myTiles, schoolId, source, status } = useCampusScreen()
+  const {
+    snapshot,
+    standings,
+    myTiles,
+    schoolId,
+    source,
+    pendingContributionCount,
+    lastAcceptedAt,
+  } = useCampusScreen()
   const now = Date.now()
 
   return (
@@ -71,7 +80,7 @@ export function Campus() {
         action={
           <div className="flex items-center gap-2">
             {theme && <CampusSchoolBadge theme={theme} showColorSource />}
-            <Badge tone="muted">{status === 'ready' ? '연결됨' : '준비 중'}</Badge>
+            <CampusConnectionBadge />
           </div>
         }
       />
@@ -95,6 +104,17 @@ export function Campus() {
             <div className="mt-4">
               <CampusSeasonBar season={snapshot.season} now={now} />
             </div>
+            {/* 권위 총점 옆에 대기·최근 반영 상태를 함께 보여 줍니다(§5-E). */}
+            <p data-testid="campus-sync-line" className="mt-2 text-[11px] text-ink-soft">
+              {pendingContributionCount > 0
+                ? `연결되면 자동 반영될 기여 ${pendingContributionCount}건 · `
+                : ''}
+              {lastAcceptedAt
+                ? `마지막 기여 반영 ${new Date(lastAcceptedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
+                : source === 'supabase'
+                  ? '이번 세션에서 아직 반영된 기여가 없어요'
+                  : ''}
+            </p>
           </Card>
 
           <CampusBackdrop kind="library" className="mb-4 rounded-card">
