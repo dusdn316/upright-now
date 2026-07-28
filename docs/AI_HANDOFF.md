@@ -1,16 +1,31 @@
 # AI_HANDOFF — UpRight Now 작업 인수인계
 
-> 마지막 갱신: 2026-07-25 · FINAL RELEASE FREEZE (v1.0.0-mvp)
+> 마지막 갱신: 2026-07-28 · v1.1.0 릴리스 (main · 태그 `v1.1.0` · 커밋 `adc9c9b`)
+>
+> 이 문서의 수치는 **코드가 단일 기준**입니다. 값을 인용할 때는 반드시
+> `src/constants/*` 와 `src/features/game/rewards.ts` 를 다시 확인하세요.
 
 ## 현재 상태 요약
 
 - **Production**: https://upright-now.vercel.app
 - **GitHub**: https://github.com/suhyunkim1105-hash/upright-now (main)
-- 릴리스 태그: v1.0.0-mvp · 릴리스 커밋은 git log 참조
-- 구현 완료: 카메라 자세 감지 · 캘리브레이션 v2 · 회복 게임 · 세션/기록 ·
-  성장 · 상점(구매/장착) · 설정(민감도/초기화·PIP 토글) · 스트레칭 6종 ·
-  PIP 미니 위젯(폴백 포함) · 2인 친구 방(Production Supabase 라이브 검증)
-- 전체 테스트: lint 0 · typecheck · unit 173/173 · e2e 68/68(라이브 room 포함) · build OK
+- 릴리스 태그: `v1.1.0` (main, adc9c9b) · RC 기록 `v1.1.0-rc.1` / `v1.1.0-rc.2`
+- v1.0 구현: 카메라 자세 감지 · 캘리브레이션 · 회복 게임 · 세션/기록 ·
+  성장 · 상점 · 설정 · 스트레칭 6종 · PIP 미니 위젯 · 2인 친구 방
+- **v1.1 추가**:
+  - **모드 시스템** — 기본 3종(도서관·내 공간·팀플) + 내 모드 최대 3개.
+    소리 팩·연출·스트레칭 종류·괴물 테마·친구 기능·기준 프로필 연결
+  - **경제 v2** — 세션 완주 보상을 길이별로 차등, 회복 25/5 등 재조정
+  - **개인 괴물 4단계 장기 진행도** — 세션 간 HP 유지, 4단계 처치 후 순환
+  - **유효 집중 공격** — 감지 가능 집중 5분마다 자동 피해(자세를 무너뜨리지
+    않아도 진행)
+  - **캠퍼스 테마·영토전** — 96 영토, 라이브 Supabase + Realtime
+  - **사운드 팩** — Web Audio 합성음, 모드별 팩 선택
+  - **세션 직접 설정** — 집중 5~120분 / 회복 휴식 0~30분
+  - **승인 에셋 통합** — 캐릭터 6단계·괴물 3종 4phase·상점 레이어·스트레칭·지도
+- 전체 테스트(v1.1.0 기준): lint 에러 0 · typecheck 통과 · **unit 415/415** ·
+  **e2e 94/94**(라이브 room 포함) · assets:verify 112검사 missing 0 broken 0 ·
+  build 통과
 - 기존 프로젝트 `C:\Users\수현\Desktop\거부기탈출` 은 읽기 전용 참고. 수정 금지.
 
 ## 자세 판정 파이프라인 (시간 소유권 주의)
@@ -30,23 +45,72 @@
 - posture engine·calibration·recovery 타이밍·applyReward·finalize 구조는
   승인된 상태 — 필요 없이 재설계 금지.
 
-## 보상 (단일 진입점)
+## 보상 (단일 진입점 · 경제 v2)
 
 - `features/game/rewards.ts` `applyReward({id, sessionId, type})` 만 XP/포인트 적립
   + `recentXp` 최근 5개 기록
-- recovery 30/10(세션당 XP 5회 상한) · session_completed 100/100 ·
-  stretch 20/20 · goal 20/20
-- 종료는 `finalizeSession` 만: 완료 인정 = 타이머 종료 또는 80% 이상.
-  중도 종료 = 기록만, 보상·출석 0.
+- 행동 보상 (`constants/game.ts` `REWARD`):
+  회복 성공 **XP 25 · 5P** (세션당 XP 보상 5회 상한 `MAX_REWARDED_RECOVERIES`) ·
+  스트레칭 완료 **10 · 10P** · 목표 완료 **15 · 10P** ·
+  친구 공동 완주 보너스 **20 · 10P**
+- 세션 완주는 **길이별** (`sessionCompletionReward(plannedMin)`):
+
+  | 계획 길이 | XP | 포인트 |
+  |---|---|---|
+  | 5분 미만 | 0 | 0 |
+  | 5~14분 | 20 | 10 |
+  | 15~29분 | 60 | 30 |
+  | 30~49분 | 80 | 40 |
+  | 50분 이상 | 120 | 60 |
+
+  (`REWARD.sessionCompleted` 60/30 은 15~29분 구간 기본값 — 실제 지급은 위 함수)
+- 종료는 `finalizeSession` 만: 완료 인정 = 타이머 종료 또는 `COMPLETION_RATIO`
+  0.8 이상. 중도 종료 = 기록만, 보상·출석 0. 출석 인정 최소 10분
+  (`ATTENDANCE_MIN_MS`).
+
+## 괴물 (개인 4단계 + 공동)
+
+- 피해량 `constants/game.ts` `DAMAGE`: 회복 **40** · 세션 완주 **100** ·
+  기린 싱크 **60** · 양측 완주 **150** · 목표 완료 **30** ·
+  유효 집중 **20**(`FOCUS_ATTACK_INTERVAL_MS` 5분마다)
+- 개인 괴물 `MONSTER_PHASE_HP` = **600 / 900 / 1300 / 1800**.
+  `monsterProgress` 가 세션 간 HP·phase 를 보존하고, `monsterBridge` 가
+  세션 시작 시 gameStore 보스에 로드 → 피해를 진행도에 반영 → 처치 시 진화
+  (4단계 처치 후 1단계로 순환). 데모·1분 점검·친구 방 세션은 진행도 미반영.
+- `BOSS_MAX_HP` 1000 은 gameStore 초기·reset 기본값(및 QA Lab 기준)일 뿐이며,
+  개인 세션의 실제 표시 HP 는 위 phase HP 로 교체됩니다.
+- 친구 방 공동 괴물은 `ROOM_BOSS_MAX_HP` **2000** (아래 친구 방 절 참조).
 
 ## 상점·성장 (Gate 1)
 
-- `constants/storeItems.ts`: 과잠 4종 100P · 백팩 3종 80P
+- `constants/storeItems.ts`: 과잠 4종 각 **240P**(네이비·버건디·포레스트·코랄) ·
+  백팩 3종 각 **180P**(새내기·도서관·팀플) ·
+  특별 아이템 **황금 과잠 400P · 은하 백팩 350P**(`SPECIAL_ITEMS`, 같은 배열에 push)
 - progressionStore: `purchaseItem(중복·부족 차단)` · `equipItem(과잠/백팩 각 1개)`
 - 잠금: 첫 정상 세션 완료(`shopUnlocked`) 전에는 상점 잠김
-- 의상 이미지 레이어 전까지 `CharacterWithGear` 가 색 리본·아이콘 배지로 표시
-  (equippedJacketId/equippedBackpackId 분리 유지 → 이미지 레이어 교체 용이)
-- 성장 단계는 XP 파생(`xpToStage`) — stage 별도 저장 금지
+- `CharacterWithGear` 가 stage 별 승인 레이어를 실제로 겹칩니다
+  (백팩 back → 캐릭터 → 과잠 → 백팩 front, 특별 아이템은 mask+gradient).
+  상점 카드는 구매 전에도 착용 미리보기를 렌더하며 store 를 변경하지 않습니다.
+  이미지 로드 실패 시에만 기존 색 리본·아이콘 배지로 폴백합니다.
+- 성장 단계는 XP 파생(`xpToStage`) — stage 별도 저장 금지.
+  필요 XP: 뽀각 거북 **0** · 꿈틀 거북 **250** · 빼꼼 거부기린 **600** ·
+  반듯 거부기린 **1000** · 쭉쭉 기린 **1500** · 우뚝 기린 **2200**
+
+## 세션·모드
+
+- 프리셋 길이 (`constants/session.ts`): 25분+2분(기본) · 15분+1분 ·
+  50분+5분 · 3분 데모+1분. 직접 설정은 집중 5~120분(5분 단위) ·
+  회복 휴식 0~30분 (`clampCustomFocusMin` / `clampCustomRestMin`).
+- 모드 (`features/modes/modeStore.ts`) — 기본 3종은 아래 설정이 고정입니다.
+
+  | 모드 | 소리 팩 | 연출 | 스트레칭 | 괴물 | 친구 기능 |
+  |---|---|---|---|---|---|
+  | 도서관 | silent | low | seated | 북몽이 | 없음 |
+  | 내 공간 | soft | rich | full | 늘몽이 | 없음 |
+  | 팀플 | social | default | mixed | 꼬몽이 | 있음 |
+
+  내 모드는 최대 **3개** (`MAX_CUSTOM_MODES`), 위 항목 + 기준 프로필 연결 ·
+  길이(focusMin/restMin)를 직접 지정합니다.
 
 ## 친구 방 (라이브 검증 완료 — Production 활성)
 
@@ -74,16 +138,26 @@
 
 ## 플래그·도구
 
-- Production env: `VITE_ENABLE_CAMERA=true` (QA Lab·friendRoom off)
+- Production env (2026-07-28 실제 상태): `VITE_SUPABASE_URL` ·
+  `VITE_SUPABASE_ANON_KEY` · `VITE_ENABLE_CAMERA` · `VITE_ENABLE_FRIEND_ROOM` ·
+  `VITE_ENABLE_REALTIME` · `VITE_ENABLE_CAMPUS_THEME` ·
+  `VITE_ENABLE_CAMPUS_TERRITORY` · `VITE_ENABLE_CAMPUS_SUPABASE` ·
+  `VITE_ENABLE_QA_LAB=false` — **`VITE_ENABLE_PIP` 만 미설정**이라
+  운영에서 PIP 자동 열기가 꺼져 있습니다(코드 기본값 false).
 - Preview: `VITE_ENABLE_QA_LAB=true` 로 /lab(상태 주입 + Posture Debug 계기판),
   `/calibration?postureDebug=1` 오버레이, `window.__upright`
+- 배포는 **반드시 `npx vercel deploy`(클라우드 빌드)**. env 가 sensitive 라
+  `vercel pull` 은 `[SENSITIVE]` 플레이스홀더만 받으므로 로컬 prebuilt 를
+  올리면 깨진 번들이 배포됩니다.
 
 ## 검증
 
 ```
 npm run lint / typecheck / test / test:e2e / build
+npm run assets:verify   # 승인 에셋 112건 존재·무결성
 ```
-173 unit + 68 e2e 통과(라이브 2인 room 포함). e2e 는 포트 5273 자체 서버.
+unit 415 + e2e 94 통과(라이브 2인 room 포함). e2e 는 이중 dev 서버 —
+5283(캠퍼스 OFF 회귀) / 5284(캠퍼스 ON).
 
 ## 실카메라 수동 확인 필요 (Claude 환경에서는 검증 불가)
 
@@ -97,8 +171,12 @@ npm run lint / typecheck / test / test:e2e / build
 
 1. 실카메라 임계값(tolerance 바닥값·yaw 0.7)은 합성 데이터 기준 — 실기기 튜닝 필요
 2. 친구 방 실환경 노트: presence 메타는 participantId 로 dedupe(최신 우선), 기린 싱크 피해는 두 회복 uuid 의 XOR 파생 id 사용(원본 id 재사용 시 dedup 충돌), realtime.messages RLS 정책이 없어 표준(비 private) 채널 사용 — 정책 추가 시 private 전환 가능
-3. Lv.2/4/5/6 상태 에셋 · 의상 이미지 레이어 · 모션 WebM 미보유
-4. recovery_started 토스트 카피("돌아오는 중이에요") 검토
+3. `VITE_ENABLE_PIP` 가 Production 에 없어 운영에서 PIP 자동 열기가 꺼져 있음
+   (켜려면 Vercel Production 에 `VITE_ENABLE_PIP=true` 추가 후 재배포)
+4. 모바일 375px 에서 사이드바 캐릭터 figure 가 약 14px 가로 오버플로
+   (지원 폭 768/1280/1440 은 정상 — 데스크톱 우선 제품이라 보류)
+5. 모션 WebM 미보유(정적 WebP + CSS 연출로 대체) · Lv.2/4/5/6 전용 상태 컷 없음
+6. recovery_started 토스트 카피("돌아오는 중이에요") 검토
 
 ## fix/core-session-flow — 모드·캘리브레이션·협동 흐름 (2026-07-26)
 

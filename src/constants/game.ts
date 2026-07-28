@@ -64,6 +64,7 @@ export const MONSTER_PHASE_HP = [600, 900, 1300, 1800] as const
  */
 export const BOSS_MAX_HP = 1000
 
+/** 내부 코드명. 사용자 화면에는 MONSTER_THEMES 의 괴물 이름만 노출됩니다. */
 export const BOSS_NAME = '마감괴수 D-DAY'
 
 export type BossPhase = 'calm' | 'angry' | 'rage' | 'defeated'
