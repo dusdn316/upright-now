@@ -5,6 +5,7 @@ import { Badge, Button, Card, CardTitle, Progress } from '@/components/ui'
 import { Icon } from '@/components/ui/Icon'
 import { CharacterViewport } from '@/components/character/CharacterViewport'
 import { ROOM_PRIVACY } from '@/constants/copy'
+import { MAX_ROOM_MEMBERS, MIN_ROOM_MEMBERS } from '@/constants/rooms'
 import { ROUTES } from '@/constants/routes'
 import { featureFlags } from '@/lib/feature-flags/flags'
 import { useRoomStore } from '@/features/rooms/roomStore'
@@ -83,7 +84,7 @@ export function Room() {
     return (
       <Placeholder
         title="친구 방 대기실"
-        description="6자리 코드로 최대 2명이 함께 25분을 진행하는 공간이에요."
+        description={`6자리 코드로 최대 ${MAX_ROOM_MEMBERS}명이 함께 25분을 진행하는 공간이에요.`}
         notice={FRIEND_ROOM.toast}
       />
     )
@@ -92,7 +93,9 @@ export function Room() {
   const me = room.members.find((m) => m.participantId === room.myId)
   const fullyReady = (m: (typeof room.members)[number]) =>
     m.cameraReady && m.calibrationReady && m.modelReady && m.userReady
-  const bothReady = room.members.length === 2 && room.members.every(fullyReady)
+  // 2명 이상 · 참가자 전원 준비 완료여야 시작할 수 있습니다(서버도 같은 규칙).
+  const everyoneReady =
+    room.members.length >= MIN_ROOM_MEMBERS && room.members.every(fullyReady)
   const myPrereqOk = featureFlags.camera
     ? room.myCameraReady && room.myModelReady && validActiveProfile
     : true
@@ -185,16 +188,23 @@ export function Room() {
           <Card tone="blue">
             <div className="flex items-center justify-between">
               <CardTitle>참가자</CardTitle>
-              <Badge tone="blue">{`${room.members.length} / 2`}</Badge>
+              <Badge tone="blue">{`${room.members.length} / ${MAX_ROOM_MEMBERS}`}</Badge>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {[0, 1].map((slot) => {
-                const member = room.members[slot]
+            {/*
+              참가자 카드 + 빈 자리 하나(정원이 남았을 때만).
+              10명까지 늘어나도 열 수가 자동으로 늘어납니다.
+            */}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                ...room.members.map((m) => m.participantId),
+                ...(room.members.length < MAX_ROOM_MEMBERS ? ['__empty'] : []),
+              ].map((slotKey) => {
+                const member = room.members.find((m) => m.participantId === slotKey)
                 if (!member) {
                   return (
                     <div
-                      key={slot}
+                      key={slotKey}
                       className="flex min-h-[140px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-line bg-surface/60 text-sm text-ink-soft"
                     >
                       <Icon name="friends" />
@@ -301,10 +311,14 @@ export function Room() {
               {room.isHost && (
                 <Button
                   size="sm"
-                  disabled={!bothReady}
+                  disabled={!everyoneReady}
                   onClick={() => void startRoomSession()}
                 >
-                  {bothReady ? '세션 시작' : '두 명 모두 준비되면 시작'}
+                  {everyoneReady
+                    ? '세션 시작'
+                    : room.members.length < MIN_ROOM_MEMBERS
+                      ? `${MIN_ROOM_MEMBERS}명부터 시작할 수 있어요`
+                      : '모두 준비되면 시작'}
                 </Button>
               )}
               <Button
