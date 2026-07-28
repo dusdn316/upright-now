@@ -5,6 +5,9 @@
 
 **Production**: https://upright-now.vercel.app
 
+> 🧭 **팀원이라면 [docs/TEAM_START.md](docs/TEAM_START.md) 부터 보세요.**
+> 설치·환경 변수·폴더 지도·현재 게임 수치·협업 규칙이 한 문서에 정리돼 있습니다.
+
 ## 릴리스 상태 (2026-07-28)
 
 | 구분 | 내용 |
@@ -39,7 +42,7 @@ v1.1.0 은 main 에 병합·배포됐지만, **기능 노출은 Vercel Productio
 - **카메라 원본 미저장** — 영상·프레임·랜드마크·자세 좌표는 어떤 서버에도
   전송하지 않음 (아래 개인정보 처리 원칙)
 
-자세한 이력·검증 결과는 [docs/INTEGRATION_STATUS.md](docs/INTEGRATION_STATUS.md),
+팀 시작 안내는 [docs/TEAM_START.md](docs/TEAM_START.md),
 코드 기준 수치는 [docs/AI_HANDOFF.md](docs/AI_HANDOFF.md) 를 보세요.
 
 ## 구현된 핵심 기능
@@ -116,7 +119,7 @@ npx playwright test e2e/room-live.spec.ts
 
 친구 방 백엔드는 `supabase/schema.sql` 로 구성합니다
 (RLS + RPC 원자적 보스 HP, Anonymous Sign-Ins 필요).
-이후 변경은 `supabase/migrations/` 의 마이그레이션 4건으로 적용하며,
+이후 변경은 `supabase/migrations/` 의 마이그레이션 5건으로 적용하며,
 캠퍼스 영토전(96 영토·학교 디렉터리·Realtime)은
 `20260727_campus_final_grid_realtime.sql` 이 최종 기준입니다.
 
@@ -132,5 +135,6 @@ npx playwright test e2e/room-live.spec.ts
 
 ## 문서
 
+- 팀 시작 안내: [docs/TEAM_START.md](docs/TEAM_START.md)
 - 인수인계: [docs/AI_HANDOFF.md](docs/AI_HANDOFF.md)
-- 기획·스펙 원문: [docs/](docs/) (00~21)
+- 기획·스펙 원문(초기 기록): [docs/archive/](docs/archive/)

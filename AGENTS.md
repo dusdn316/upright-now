@@ -9,16 +9,20 @@
 아래 순서로 문서를 우선합니다.
 
 1. `AGENTS.md`
-2. `docs/02_PRD.md`
-3. `docs/03_USER_FLOW.md`
-4. `docs/06_POSTURE_ENGINE_SPEC.md`
-5. `docs/07_GAME_SYSTEM_SPEC.md`
-6. `docs/08_SOCIAL_ROOM_SPEC.md`
-7. `docs/14_DATA_PRIVACY_SECURITY.md`
-8. `docs/05_SCREEN_SPEC.md`
-9. `docs/12_DESIGN_SYSTEM.md`
-10. `docs/15_TECHNICAL_ARCHITECTURE.md`
-11. 현재 코드와 테스트
+2. `docs/TEAM_START.md` (현재 기준 값·폴더 지도·협업 규칙)
+3. `docs/archive/02_PRD.md`
+4. `docs/archive/03_USER_FLOW.md`
+5. `docs/archive/06_POSTURE_ENGINE_SPEC.md`
+6. `docs/archive/07_GAME_SYSTEM_SPEC.md`
+7. `docs/archive/08_SOCIAL_ROOM_SPEC.md`
+8. `docs/14_DATA_PRIVACY_SECURITY.md`
+9. `docs/archive/05_SCREEN_SPEC.md`
+10. `docs/archive/12_DESIGN_SYSTEM.md`
+11. `docs/archive/15_TECHNICAL_ARCHITECTURE.md`
+12. 현재 코드와 테스트
+
+`docs/archive/` 문서의 수치는 초기 기획 시점 값입니다.
+숫자가 다르면 코드(`src/constants/`)와 `docs/TEAM_START.md` 가 우선입니다.
 
 이 패키지 이전의 `기린이 되자!`, `Zarafa`, 30분 세션, 3단계 성장, 자세 바통 중심 문서는 구현 기준이 아닙니다.
 
