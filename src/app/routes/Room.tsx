@@ -21,7 +21,11 @@ import { useUserStore } from '@/features/onboarding/userStore'
 import { useCalibrationStore, hasValidActiveProfile } from '@/features/calibration/calibrationStore'
 import { DetectionPreflight } from '@/components/room/DetectionPreflight'
 import { TextField } from '@/components/ui'
-import { REACTION_LABEL } from '@/features/rooms/roomEvents'
+import {
+  REACTION_EMOJI,
+  REACTION_KINDS,
+  REACTION_LABEL,
+} from '@/features/rooms/roomEvents'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useToast } from '@/app/providers/ToastProvider'
 import { CampusRoomBanner } from '@/components/campus/CampusBits'
@@ -38,6 +42,8 @@ export function Room() {
   const configureSession = useSessionStore((s) => s.configure)
   const hasOnboarded = useUserStore((s) => s.hasOnboarded)
   const setNickname = useUserStore((s) => s.setNickname)
+  const roomSoundMuted = useUserStore((s) => s.roomSoundMuted)
+  const toggleRoomSoundMuted = useUserStore((s) => s.toggleRoomSoundMuted)
   const myProfiles = useCalibrationStore((s) => s.profiles)
   const validActiveProfile = useCalibrationStore((s) => hasValidActiveProfile(s))
   const [preflightOpen, setPreflightOpen] = useState(false)
@@ -363,19 +369,41 @@ export function Room() {
             </Card>
 
             <Card>
-              <CardTitle>응원 보내기</CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle>응원 보내기</CardTitle>
+                {/*
+                  방 안에서만 소리를 잠시 끕니다.
+                  모드별 소리 설정은 그대로 두고 방에 있는 동안만 덮어씁니다.
+                */}
+                <button
+                  type="button"
+                  data-testid="room-sound-toggle"
+                  aria-pressed={roomSoundMuted}
+                  onClick={toggleRoomSoundMuted}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-line bg-surface px-2.5 text-xs font-semibold text-ink hover:bg-canvas"
+                >
+                  <Icon name="headphones" size={14} />
+                  {roomSoundMuted ? '방 소리 꺼짐' : '방 소리 켜짐'}
+                </button>
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                {(['cheer', 'reset', 'done'] as const).map((kind) => (
+                {REACTION_KINDS.map((kind) => (
                   <Button
                     key={kind}
                     size="sm"
                     variant="secondary"
                     onClick={() => void sendReaction(kind)}
                   >
+                    <span aria-hidden="true">{REACTION_EMOJI[kind]}</span>
                     {REACTION_LABEL[kind]}
                   </Button>
                 ))}
               </div>
+              {roomSoundMuted && (
+                <p className="mt-2 text-[11px] text-ink-soft">
+                  이 방에서만 소리가 꺼져 있어요. 모드 설정은 그대로예요.
+                </p>
+              )}
               {room.reactions[0] && (
                 <p className="mt-3 rounded-xl bg-canvas px-3 py-2 text-xs text-ink">
                   {`${room.reactions[0].nickname}: ${REACTION_LABEL[room.reactions[0].reaction]}`}

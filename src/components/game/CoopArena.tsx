@@ -4,7 +4,11 @@ import { Icon } from '@/components/ui/Icon'
 import { Progress } from '@/components/ui'
 import { getShopItem } from '@/constants/storeItems'
 import { MONSTER_THEMES } from '@/features/modes/modeStore'
-import { REACTION_LABEL } from '@/features/rooms/roomEvents'
+import {
+  REACTION_EMOJI,
+  REACTION_KINDS,
+  REACTION_LABEL,
+} from '@/features/rooms/roomEvents'
 import { sendReaction } from '@/features/rooms/roomService'
 import { useRoomStore } from '@/features/rooms/roomStore'
 import { usePostureStore } from '@/features/posture-engine/postureStore'
@@ -61,8 +65,9 @@ function ReactionBubble({ participantId }: { participantId: string | null }) {
   return (
     <span
       data-testid="reaction-bubble"
-      className="anim-toast-in absolute -top-2 left-1/2 z-10 -translate-x-1/2 rounded-2xl border border-line bg-surface px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-ink shadow-card"
+      className="anim-toast-in absolute -top-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-line bg-surface px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-ink shadow-card"
     >
+      <span aria-hidden="true">{REACTION_EMOJI[latest.reaction]}</span>
       {latest.reactionText ?? REACTION_LABEL[latest.reaction]}
     </span>
   )
@@ -169,16 +174,16 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
         </div>
       </div>
 
-      {/* 반응 3종 — 5초에 1회, 자유 채팅 없음 */}
+      {/* 정해진 반응만 보냅니다 — 5초에 1회, 자유 채팅 없음 */}
       <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-        {(['cheer', 'reset', 'done'] as const).map((kind) => (
+        {REACTION_KINDS.map((kind) => (
           <button
             key={kind}
             type="button"
             className="h-8 rounded-xl border border-line bg-surface px-2.5 text-xs font-semibold text-ink hover:bg-canvas"
             onClick={() => void sendReaction(kind)}
           >
-            {REACTION_LABEL[kind]}
+            <span aria-hidden="true">{REACTION_EMOJI[kind]}</span> {REACTION_LABEL[kind]}
           </button>
         ))}
         {customReactions.map((text) => (
