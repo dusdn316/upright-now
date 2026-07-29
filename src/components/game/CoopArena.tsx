@@ -4,11 +4,8 @@ import { Icon } from '@/components/ui/Icon'
 import { Progress } from '@/components/ui'
 import { getShopItem } from '@/constants/storeItems'
 import { MONSTER_THEMES } from '@/features/modes/modeStore'
-import {
-  REACTION_EMOJI,
-  REACTION_KINDS,
-  REACTION_LABEL,
-} from '@/features/rooms/roomEvents'
+import { REACTION_KINDS, REACTION_LABEL } from '@/features/rooms/roomEvents'
+import { ReactionIcon } from '@/components/room/ReactionIcon'
 import { sendReaction } from '@/features/rooms/roomService'
 import { useRoomStore } from '@/features/rooms/roomStore'
 import { usePostureStore } from '@/features/posture-engine/postureStore'
@@ -67,7 +64,7 @@ function ReactionBubble({ participantId }: { participantId: string | null }) {
       data-testid="reaction-bubble"
       className="anim-toast-in absolute -top-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-line bg-surface px-2.5 py-1 text-[11px] font-bold whitespace-nowrap text-ink shadow-card"
     >
-      <span aria-hidden="true">{REACTION_EMOJI[latest.reaction]}</span>
+      <ReactionIcon kind={latest.reaction} size={44} />
       {latest.reactionText ?? REACTION_LABEL[latest.reaction]}
     </span>
   )
@@ -183,7 +180,7 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
             className="h-8 rounded-xl border border-line bg-surface px-2.5 text-xs font-semibold text-ink hover:bg-canvas"
             onClick={() => void sendReaction(kind)}
           >
-            <span aria-hidden="true">{REACTION_EMOJI[kind]}</span> {REACTION_LABEL[kind]}
+            <ReactionIcon kind={kind} size={28} /> {REACTION_LABEL[kind]}
           </button>
         ))}
         {customReactions.map((text) => (
