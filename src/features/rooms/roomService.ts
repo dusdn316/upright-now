@@ -9,6 +9,7 @@ import {
   type ReactionKind,
   type RoomEvent,
 } from './roomEvents'
+import { MAX_ROOM_MEMBERS } from '@/constants/rooms'
 import { createGiraffeSync, deriveSyncEventId, registerRecovery } from './giraffeSync'
 import { useRoomStore, type MemberState } from './roomStore'
 import { useUserStore } from '@/features/onboarding/userStore'
@@ -330,6 +331,7 @@ export async function createRoom(input: {
     p_subject: input.subject || null,
     p_goal: input.goal || null,
     p_duration_seconds: input.durationSec,
+    p_capacity: MAX_ROOM_MEMBERS,
   })
 
   if (error || !data) {
@@ -379,7 +381,7 @@ export async function joinRoom(
     const friendly = message.includes('not found')
       ? '방을 찾지 못했어요. 코드를 다시 확인해 주세요.'
       : message.includes('full')
-        ? '이 방은 이미 두 명이 참여하고 있어요.'
+        ? `이 방은 정원(${MAX_ROOM_MEMBERS}명)이 찼어요.`
         : message.includes('waiting')
           ? '이미 시작되었거나 종료된 방이에요.'
           : '입장하지 못했어요. 다시 시도해 주세요.'

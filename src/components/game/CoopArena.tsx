@@ -77,7 +77,8 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
   const snapshot = usePostureStore((s) => s.snapshot)
   const game = useGameStore()
 
-  const friend = room.members.find((m) => m.participantId !== room.myId)
+  // 나를 제외한 참가자 전원 (2인 방이면 1명 — 기존과 동일)
+  const friends = room.members.filter((m) => m.participantId !== room.myId)
   const theme = MONSTER_THEMES.komong
   const ratio = Math.max(0, room.bossHp / room.bossMaxHp)
 
@@ -127,33 +128,42 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
           </p>
         </div>
 
-        {/* 친구 캐릭터 — 자세 상태 없이 idle + 공격 연출만 */}
-        <div className="relative flex flex-col items-center">
-          {friend ? (
-            <>
-              <ReactionBubble participantId={friend.participantId} />
-              <CharacterViewport
-                stage={Math.min(6, Math.max(1, friend.stage)) as CharacterStage}
-                attackTick={room.friendAttackTick}
-                attackDurationMs={2200}
-                size={150}
-                decorative
-              />
-              <p className="text-xs font-bold text-ink">{friend.nickname}</p>
-              <GearBadges jacketId={friend.jacketId} backpackId={friend.backpackId} />
-              <p className="text-[10px] text-ink-soft">
-                {friend.state === 'away'
-                  ? '자리 비움'
-                  : friend.state === 'completed'
-                    ? '완주!'
-                    : friend.state === 'resting'
-                      ? '회복 휴식'
-                      : '집중 중'}
-              </p>
-            </>
+        {/*
+          함께하는 참가자 — 자세 상태 없이 idle + 공격 연출만.
+          인원이 늘어나면 캐릭터를 작게 줄여 한 줄에 담습니다.
+        */}
+        <div className="relative flex flex-wrap items-end justify-center gap-x-3 gap-y-2">
+          {friends.length > 0 ? (
+            friends.map((friend) => (
+              <div key={friend.participantId} className="relative flex flex-col items-center">
+                <ReactionBubble participantId={friend.participantId} />
+                <CharacterViewport
+                  stage={Math.min(6, Math.max(1, friend.stage)) as CharacterStage}
+                  attackTick={room.friendAttackTick}
+                  attackDurationMs={2200}
+                  size={friends.length > 3 ? 74 : friends.length > 1 ? 104 : 150}
+                  decorative
+                />
+                <p className="max-w-[92px] truncate text-xs font-bold text-ink">
+                  {friend.nickname}
+                </p>
+                {friends.length <= 3 && (
+                  <GearBadges jacketId={friend.jacketId} backpackId={friend.backpackId} />
+                )}
+                <p className="text-[10px] text-ink-soft">
+                  {friend.state === 'away'
+                    ? '자리 비움'
+                    : friend.state === 'completed'
+                      ? '완주!'
+                      : friend.state === 'resting'
+                        ? '회복 휴식'
+                        : '집중 중'}
+                </p>
+              </div>
+            ))
           ) : (
             <p className="pb-8 text-xs font-bold text-coral">
-              친구 연결이 끊겼어요. 다시 접속을 기다리고 있어요.
+              함께하던 참가자의 연결이 끊겼어요. 다시 접속을 기다리고 있어요.
             </p>
           )}
         </div>
