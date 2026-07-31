@@ -378,13 +378,17 @@ export async function joinRoom(
 
   if (error || !data) {
     const message = error?.message ?? ''
+    // 'not open' = 새 서버(중간 합류 허용) · 'waiting' = 마이그레이션 전 서버.
+    // 두 메시지를 모두 다뤄 SQL 실행 전에도 안내가 깨지지 않게 합니다.
     const friendly = message.includes('not found')
       ? '방을 찾지 못했어요. 코드를 다시 확인해 주세요.'
       : message.includes('full')
         ? `이 방은 정원(${MAX_ROOM_MEMBERS}명)이 찼어요.`
-        : message.includes('waiting')
-          ? '이미 시작되었거나 종료된 방이에요.'
-          : '입장하지 못했어요. 다시 시도해 주세요.'
+        : message.includes('not open')
+          ? '이미 끝난 방이에요. 새 방을 만들어 보세요.'
+          : message.includes('waiting')
+            ? '이미 시작되었거나 종료된 방이에요.'
+            : '입장하지 못했어요. 다시 시도해 주세요.'
     s.patch({ phase: 'error', errorMessage: friendly })
     return { ok: false, message: friendly }
   }
