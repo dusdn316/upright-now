@@ -21,11 +21,8 @@ import { useUserStore } from '@/features/onboarding/userStore'
 import { useCalibrationStore, hasValidActiveProfile } from '@/features/calibration/calibrationStore'
 import { DetectionPreflight } from '@/components/room/DetectionPreflight'
 import { TextField } from '@/components/ui'
-import {
-  REACTION_EMOJI,
-  REACTION_KINDS,
-  REACTION_LABEL,
-} from '@/features/rooms/roomEvents'
+import { REACTION_KINDS, REACTION_LABEL } from '@/features/rooms/roomEvents'
+import { ReactionIcon } from '@/components/room/ReactionIcon'
 import { useSessionStore } from '@/features/sessions/sessionStore'
 import { useToast } from '@/app/providers/ToastProvider'
 import { CampusRoomBanner } from '@/components/campus/CampusBits'
@@ -394,7 +391,7 @@ export function Room() {
                     variant="secondary"
                     onClick={() => void sendReaction(kind)}
                   >
-                    <span aria-hidden="true">{REACTION_EMOJI[kind]}</span>
+                    <ReactionIcon kind={kind} size={32} />
                     {REACTION_LABEL[kind]}
                   </Button>
                 ))}
