@@ -129,7 +129,8 @@ export function RoomNew() {
         <Card tone="blue">
           <CardTitle>코드로 입장</CardTitle>
           <p className="mt-1 text-xs text-ink-soft">
-            친구가 알려준 6자리 코드를 입력해 주세요.
+            친구가 알려준 6자리 코드를 입력해 주세요. 이미 시작된 방에도
+            자리가 남아 있으면 이어서 들어갈 수 있어요.
           </p>
           <div className="mt-4 flex items-end gap-2">
             <div className="flex-1">
