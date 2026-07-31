@@ -151,7 +151,9 @@ export function Session() {
         const cur = useSessionStore.getState()
         const room = useRoomStore.getState()
         if (cur.status === 'completed' && cur.mode === 'room' && room.phase !== 'idle') {
-          void leaveRoom()
+          // 상시 방은 서버가 대기실로 되돌리므로 방을 나가지 않습니다.
+          // 참가 상태를 유지해야 같은 방에서 다음 라운드를 이어갈 수 있어요.
+          if (!room.isPersistent) void leaveRoom()
           cur.configure({ mode: 'solo' })
         }
       }, 150)
