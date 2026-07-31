@@ -172,12 +172,17 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
       </div>
 
       {/* 정해진 반응만 보냅니다 — 5초에 1회, 자유 채팅 없음 */}
+      {/*
+        버튼의 inline-flex 는 필수 — 전역 리셋이 img 를 display:block 으로
+        만들어, 일반 버튼에서는 이미지가 한 줄을 차지하고 라벨이 아래로
+        밀립니다.
+      */}
       <div className="mt-3 flex flex-wrap justify-center gap-1.5">
         {REACTION_KINDS.map((kind) => (
           <button
             key={kind}
             type="button"
-            className="h-8 rounded-xl border border-line bg-surface px-2.5 text-xs font-semibold text-ink hover:bg-canvas"
+            className="inline-flex h-8 items-center gap-1 rounded-xl border border-line bg-surface px-2.5 text-xs font-semibold whitespace-nowrap text-ink hover:bg-canvas"
             onClick={() => void sendReaction(kind)}
           >
             <ReactionIcon kind={kind} size={28} /> {REACTION_LABEL[kind]}
@@ -187,7 +192,7 @@ export function CoopArena({ bossHitTick }: { bossHitTick: number }) {
           <button
             key={text}
             type="button"
-            className="h-8 rounded-xl border border-pink/40 bg-pink-soft px-2.5 text-xs font-semibold text-ink hover:bg-canvas"
+            className="inline-flex h-8 items-center gap-1 rounded-xl border border-pink/40 bg-pink-soft px-2.5 text-xs font-semibold whitespace-nowrap text-ink hover:bg-canvas"
             onClick={() => void sendReaction('cheer', text)}
           >
             {text}
