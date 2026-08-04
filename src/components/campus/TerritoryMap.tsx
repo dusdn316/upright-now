@@ -7,12 +7,12 @@ import { useCampusThemeStore } from '@/features/campus/campusThemeStore'
 import { useSchoolIdentity, resolveSchoolIdentityNow } from '@/features/campus/schoolDirectory'
 import type { CampusTile } from '@/features/campus/types'
 import { CampusBattleOverlay } from './CampusBattleOverlay'
-import { SeoulMapLayer } from './SeoulMapLayer'
+import { SeoulSchoolMarkers } from './SeoulSchoolMarkers'
 
 /**
- * 캠퍼스 배경 이미지의 실측 12×8 = 96칸 오버레이 지도.
+ * 서울 지도 이미지 위에 12×8 = 96칸 영토 오버레이를 렌더링합니다.
  *
- * - 배경: campus-map-bg-1536.webp (viewBox 0 0 1536 1024, 좌표계 동일)
+ * - 배경: seoul-district-map.png (480×394)
  * - 셀 quad 는 campusGridOverlay 의 정적 실측 좌표 — 흰 길 안쪽 inset
  * - 중립 칸은 배경 원본을 그대로 두고(fill ≤ 0.10), 굵은 흰 선을 다시
  *   그리지 않습니다. 점령·경합·선택만 색·표식을 얹습니다.
@@ -86,30 +86,29 @@ export function TerritoryMap({
       className="relative w-full min-w-0 overflow-auto"
       style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
     >
-      <p className="sr-only">{`가상 캠퍼스 지도 (영토 ${CAMPUS_GRID_CELL_COUNT}곳)`}</p>
+      <p className="sr-only">{`서울 지도 기반 영토전 (영토 ${CAMPUS_GRID_CELL_COUNT}곳)`}</p>
       <svg
-        viewBox="0 0 1536 1024"
+        viewBox="0 0 480 394"
         className={large ? 'h-auto min-w-[1100px] md:min-w-[1400px]' : 'h-auto w-full'}
-        aria-label="가상 캠퍼스 지도 — 12×8 격자 96개 영토"
+        aria-label="실제 서울 지도 기반 12×8 격자 96개 영토"
       >
         {!bgBroken ? (
           <image
-            href="/assets/campus/campus-map-bg-1536.webp"
+            href="/assets/campus/seoul-district-map.png"
             x="0"
             y="0"
-            width="1536"
-            height="1024"
-            preserveAspectRatio="xMidYMid slice"
+            width="480"
+            height="394"
+            preserveAspectRatio="none"
             onError={() => setBgBroken(true)}
           />
         ) : (
           // 이미지 실패 폴백 — 배경 없이도 격자와 상태는 그대로 동작
-          <rect x="0" y="0" width="1536" height="1024" fill="#EAE4D3" />
+          <rect x="0" y="0" width="480" height="394" fill="#F3F5F6" />
         )}
-        <g transform="scale(1.39636 1.13778)" pointerEvents="none">
-          <SeoulMapLayer />
-        </g>
-        {ordered.map((tile) => {
+        <SeoulSchoolMarkers />
+        <g transform="scale(0.3125 0.384765625)">
+          {ordered.map((tile) => {
           const cell = gridCellFor(tile)
           if (!cell) return null
           const status = tileStatus(tile)
@@ -143,7 +142,7 @@ export function TerritoryMap({
             .filter(Boolean)
             .join(', ')
 
-          return (
+            return (
             <g key={tile.id}>
               <rect
                 data-testid="territory-tile"
@@ -252,8 +251,9 @@ export function TerritoryMap({
                 }
               />
             </g>
-          )
-        })}
+            )
+          })}
+        </g>
       </svg>
     </div>
   )
