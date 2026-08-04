@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   CAMPUS_COPY,
   CAMPUS_SCHOOLS,
@@ -35,7 +35,6 @@ export function SchoolPicker({
 }: {
   onChanged?: (schoolId: string) => void
 }) {
-  const groupName = useId()
   const schoolId = useCampusThemeStore((s) => s.schoolId)
   const customColor = useCampusThemeStore((s) => s.customColor)
   const customSchoolName = useCampusThemeStore((s) => s.customSchoolName)
@@ -48,6 +47,7 @@ export function SchoolPicker({
   const [message, setMessage] = useState<string | null>(null)
   const [colorDraft, setColorDraft] = useState(customColor)
   const [customFormOpen, setCustomFormOpen] = useState(false)
+  const [selectedRegion, setSelectedRegion] = useState('')
   const [schoolSearch, setSchoolSearch] = useState('')
   const directoryEntries = useCampusDirectoryStore((s) => s.entries)
   const registeredSchools = useMemo(
@@ -77,6 +77,7 @@ export function SchoolPicker({
   const locked = Boolean(schoolId) && !probe.allowed
   const nextAllowed = formatNextAllowed(probe.nextAllowedAt)
   const currentTheme = resolveCampusTheme(schoolId, customColor)
+  const showSearchResults = selectedRegion.length > 0 && schoolSearch.trim().length > 0
 
   const isCustomSelected =
     customFormOpen || Boolean(schoolId?.startsWith('custom'))
@@ -115,18 +116,50 @@ export function SchoolPicker({
 
       <fieldset className="m-0 min-w-0 border-0 p-0">
         <legend className="sr-only">학교 선택</legend>
-        <label className="relative block">
-          <span className="sr-only">학교 검색</span>
-          <input
-            value={schoolSearch}
-            onChange={(e) => setSchoolSearch(e.target.value)}
-            placeholder="학교 이름 또는 짧은 이름 검색"
-            aria-label="학교 검색"
-            className="h-11 w-full rounded-2xl border border-line bg-surface px-3 text-sm text-ink outline-none transition placeholder:text-ink-soft focus:border-[#8b6cf6]"
-          />
-        </label>
-        <div className="mt-2 grid grid-cols-1 gap-2 @[560px]:grid-cols-2">
-          {searchResults.map((result) => {
+        <div className="grid grid-cols-1 gap-2 @[560px]:grid-cols-2">
+          <label className="relative block">
+            <span className="sr-only">지역 선택</span>
+            <select
+              value={selectedRegion}
+              onChange={(e) => {
+                setSelectedRegion(e.target.value)
+                setSchoolSearch('')
+              }}
+              aria-label="지역 선택"
+              className="h-11 w-full appearance-none rounded-2xl border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-[#8b6cf6]"
+            >
+              <option value="">지역 선택</option>
+              <option value="서울">서울</option>
+            </select>
+          </label>
+          <label className="relative block">
+            <span className="sr-only">대학 검색</span>
+            <input
+              value={schoolSearch}
+              disabled={!selectedRegion}
+              onChange={(e) => setSchoolSearch(e.target.value)}
+              placeholder={selectedRegion ? '대학 이름 검색' : '먼저 지역을 선택하세요'}
+              aria-label="대학 검색"
+              className="h-11 w-full rounded-2xl border border-line bg-surface px-3 text-sm text-ink outline-none transition placeholder:text-ink-soft focus:border-[#8b6cf6] disabled:cursor-not-allowed disabled:bg-canvas disabled:opacity-70"
+            />
+          </label>
+        </div>
+        {schoolId && currentTheme && (
+          <p className="mt-2 rounded-xl bg-canvas px-3 py-2 text-xs text-ink-soft">
+            현재 선택: <strong className="text-ink">{currentTheme.schoolName}</strong>
+          </p>
+        )}
+        {!selectedRegion && (
+          <p className="mt-2 text-xs text-ink-soft">지역을 선택하면 해당 지역의 대학을 검색할 수 있어요.</p>
+        )}
+        {showSearchResults && (
+          <div className="relative z-10 mt-2">
+            <ul
+              role="listbox"
+              aria-label="대학 검색 결과"
+              className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-2xl border border-line bg-surface p-1 shadow-card"
+            >
+              {searchResults.map((result) => {
             const preset = result.kind === 'preset' ? result.school : null
             const entry = result.kind === 'registered' ? result.school : null
             const id = preset?.id ?? entry?.id ?? ''
@@ -137,27 +170,15 @@ export function SchoolPicker({
             const selected = preset ? preset.id === schoolId : entry?.id === schoolId
             const disabled = locked && !selected
             return (
-              <label
+              <li
                 key={id}
-                className={[
-                  'un-radio-card flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition',
-                  selected ? 'bg-surface shadow-card' : 'border-line bg-surface',
-                  disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-canvas',
-                ].join(' ')}
-                style={
-                  selected && theme
-                    ? { borderColor: theme.primary, boxShadow: `0 0 0 2px ${theme.softStrong}` }
-                    : undefined
-                }
               >
-                <input
-                  type="radio"
-                  className="sr-only"
-                  name={groupName}
-                  value={id}
-                  checked={selected}
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
                   disabled={disabled}
-                  onChange={() => {
+                  onClick={() => {
                     if (entry) {
                       setCustomSchoolName(entry.displayName, entry.shortName)
                       setCustomColor(entry.color)
@@ -170,13 +191,16 @@ export function SchoolPicker({
                         setMessage(reason ?? '지금은 학교를 바꿀 수 없어요.')
                         return
                       }
+                      setSchoolSearch('')
                       setMessage(null)
                       onChanged?.(useCampusThemeStore.getState().schoolId ?? '')
                       return
                     }
+                    setSchoolSearch('')
                     pick(id)
                   }}
-                />
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50"
+                >
                 <span
                   aria-hidden="true"
                   className="inline-block h-7 w-7 shrink-0 rounded-full border border-line"
@@ -196,14 +220,17 @@ export function SchoolPicker({
                     <span className="sr-only">선택됨</span>
                   </span>
                 )}
-              </label>
+                </button>
+              </li>
             )
-          })}
-        </div>
-        {searchResults.length === 0 && (
-          <p className="mt-2 rounded-2xl border border-dashed border-line bg-canvas px-3 py-3 text-sm text-ink-soft">
-            검색 결과가 없어요. 아래에서 목록에 없는 대학을 직접 추가할 수 있어요.
-          </p>
+              })}
+            </ul>
+            {searchResults.length === 0 && (
+              <p className="mt-2 rounded-2xl border border-dashed border-line bg-canvas px-3 py-3 text-sm text-ink-soft">
+                검색 결과가 없어요. 아래에서 목록에 없는 대학을 직접 추가할 수 있어요.
+              </p>
+            )}
+          </div>
         )}
       </fieldset>
 
