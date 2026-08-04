@@ -207,7 +207,7 @@ export class SupabaseCampusRepository implements CampusRepository {
     const supabase = await getSupabase()
     if (!supabase) throw new Error('supabase-not-configured')
     await ensureAnonymousUser()
-    // 시즌 자동 전환 — 14일 경계에서도 새 시즌·96영토가 준비됩니다.
+    // 시즌 자동 전환 — 분기 경계에서도 새 시즌·96영토가 준비됩니다.
     try {
       await supabase.rpc('ensure_active_campus_season')
     } catch {

@@ -124,17 +124,16 @@ describe('테마 해석', () => {
 })
 
 describe('시즌', () => {
-  it('시즌 번호는 14일마다 올라간다', () => {
-    const base = Date.UTC(2026, 0, 5)
-    expect(seasonIndexAt(base)).toBe(0)
-    expect(seasonIndexAt(base + 13 * 24 * 60 * 60 * 1000)).toBe(0)
-    expect(seasonIndexAt(base + 14 * 24 * 60 * 60 * 1000)).toBe(1)
+  it('시즌은 달력 분기마다 올라간다', () => {
+    expect(seasonIndexAt(Date.UTC(2026, 0, 1))).toBe(0)
+    expect(seasonIndexAt(Date.UTC(2026, 2, 31, 23, 59))).toBe(0)
+    expect(seasonIndexAt(Date.UTC(2026, 3, 1))).toBe(1)
   })
 
   it('시즌은 시작·종료 시각과 남은 시간을 가진다', () => {
     const now = Date.UTC(2026, 0, 10)
     const season = seasonAt(now)
-    expect(season.id).toBe('season-1')
+    expect(season.id).toBe('season-2026-q1')
     expect(season.startsAt).toBeLessThanOrEqual(now)
     expect(season.endsAt).toBeGreaterThan(now)
     expect(seasonRemainingMs(season, now)).toBeGreaterThan(0)
