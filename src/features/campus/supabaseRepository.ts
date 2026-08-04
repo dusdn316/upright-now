@@ -72,6 +72,8 @@ interface StandingRow {
   school_id: string
   total_contribution: number
   active_contributors: number
+  /** 서버 RPC가 계산한 참여 인원 보정 점수(표시 기준) */
+  adjusted_score?: number | string | null
   tiles: number
 }
 
@@ -253,14 +255,25 @@ export class SupabaseCampusRepository implements CampusRepository {
     const tileCounts = countTilesBySchool(tileList)
     const standingList: CampusSchoolStanding[] = (
       (standings.data ?? []) as StandingRow[]
-    ).map((row) =>
-      withNormalizedScore({
+    ).map((row) => {
+      const serverAdjusted = Number(row.adjusted_score)
+      const normalized = Number.isFinite(serverAdjusted)
+        ? serverAdjusted
+        : withNormalizedScore({
+            schoolId: row.school_id,
+            totalContribution: row.total_contribution,
+            activeContributors: row.active_contributors,
+            tiles: tileCounts[row.school_id] ?? 0,
+          }).normalizedScore
+
+      return {
         schoolId: row.school_id,
         totalContribution: row.total_contribution,
         activeContributors: row.active_contributors,
+        normalizedScore: normalized,
         tiles: tileCounts[row.school_id] ?? 0,
-      }),
-    )
+      }
+    })
 
     const archivedRows = ((archived.data ?? []) as SeasonRow[]).slice(
       0,
@@ -288,14 +301,25 @@ export class SupabaseCampusRepository implements CampusRepository {
           return {
             season: archivedSeason,
             tiles: tilesOfSeason,
-            standings: ((archivedStandings.data ?? []) as StandingRow[]).map((s) =>
-              withNormalizedScore({
+            standings: ((archivedStandings.data ?? []) as StandingRow[]).map((s) => {
+              const serverAdjusted = Number(s.adjusted_score)
+              const fallback = withNormalizedScore({
                 schoolId: s.school_id,
                 totalContribution: s.total_contribution,
                 activeContributors: s.active_contributors,
                 tiles: counts[s.school_id] ?? 0,
-              }),
-            ),
+              }).normalizedScore
+
+              return {
+                schoolId: s.school_id,
+                totalContribution: s.total_contribution,
+                activeContributors: s.active_contributors,
+                normalizedScore: Number.isFinite(serverAdjusted)
+                  ? serverAdjusted
+                  : fallback,
+                tiles: counts[s.school_id] ?? 0,
+              }
+            }),
           }
         }),
       )
