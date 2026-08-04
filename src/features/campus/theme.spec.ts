@@ -11,8 +11,8 @@ import {
 import { seasonAt, seasonIndexAt, seasonRemainingMs, formatRemaining } from './season'
 
 describe('학교 목록', () => {
-  it('1차 학교 10곳 + 기타 = 11개', () => {
-    expect(CAMPUS_SCHOOLS).toHaveLength(11)
+  it('서울 소재 1차 확장 학교 24곳 + 기타 = 25개', () => {
+    expect(CAMPUS_SCHOOLS).toHaveLength(25)
     expect(CAMPUS_SCHOOLS[CAMPUS_SCHOOLS.length - 1].id).toBe(CUSTOM_SCHOOL_ID)
   })
 
@@ -29,6 +29,20 @@ describe('학교 목록', () => {
       '경희대학교',
       '한국외국어대학교',
       '서울시립대학교',
+      '건국대학교',
+      '동국대학교',
+      '홍익대학교',
+      '이화여자대학교',
+      '숙명여자대학교',
+      '국민대학교',
+      '숭실대학교',
+      '광운대학교',
+      '세종대학교',
+      '서울과학기술대학교',
+      '성신여자대학교',
+      '서울여자대학교',
+      '동덕여자대학교',
+      '상명대학교',
       '기타 / 직접 설정',
     ]) {
       expect(names).toContain(name)
@@ -42,6 +56,14 @@ describe('학교 목록', () => {
       } else {
         // 공식 색상이라고 주장하지 않습니다.
         expect(school.colorSource).toBe('prototype-preset')
+      }
+    }
+  })
+
+  it('기타를 뺀 학교는 학교 인증용 대표 도메인을 가진다', () => {
+    for (const school of CAMPUS_SCHOOLS) {
+      if (!school.custom) {
+        expect(school.emailDomain).toMatch(/^[a-z0-9.-]+\.[a-z]{2,}$/)
       }
     }
   })

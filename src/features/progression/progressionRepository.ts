@@ -1,6 +1,7 @@
 import { getSupabase } from '@/lib/supabase/client'
 import type { RewardType } from '@/features/game/rewards'
 import { useProgressionStore } from './progressionStore'
+import type { StreakRewardEventType } from './streak'
 
 /**
  * 서버 성장 원장 동기화.
@@ -11,8 +12,10 @@ import { useProgressionStore } from './progressionStore'
  */
 export async function syncProgressionReward(input: {
   eventId: string
-  eventType: RewardType
+  eventType: RewardType | StreakRewardEventType
   sessionId?: string
+  plannedMinutes?: number
+  metadata?: Record<string, unknown>
 }): Promise<void> {
   try {
     const supabase = await getSupabase()
@@ -25,7 +28,12 @@ export async function syncProgressionReward(input: {
       p_event_id: input.eventId,
       p_event_type: input.eventType,
       p_source_session_id: input.sessionId ?? null,
-      p_metadata: { client: 'web', schema_version: 1 },
+      p_metadata: {
+        client: 'web',
+        schema_version: 1,
+        ...(input.metadata ?? {}),
+      },
+      p_planned_minutes: input.plannedMinutes ?? null,
     })
 
     if (error) {
