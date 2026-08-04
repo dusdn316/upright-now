@@ -29,6 +29,9 @@ v1.1.0 은 main 에 병합·배포됐지만, **기능 노출은 Vercel Productio
 - **미설정: `VITE_ENABLE_PIP`** → PIP 미니 위젯 자동 열기가 운영에서
   비활성입니다. 켜려면 Vercel Production 에 `VITE_ENABLE_PIP=true` 를
   추가하고 재배포하세요.
+- **미설정: `VITE_ENABLE_AI_REPORT`** → 결과 화면의 사용자 요청형 AI 회고는
+  기본 비노출입니다. `AI_REPORT_ENABLED=true`와 서버 전용 `GEMINI_API_KEY`를
+  함께 설정한 Preview에서 먼저 검증한 뒤 Production에 켜세요.
 
 환경변수를 바꾼 뒤에는 반드시 클라우드 빌드(`npx vercel deploy --prod`)로
 재배포해야 번들에 반영됩니다.
@@ -48,7 +51,8 @@ v1.1.0 은 main 에 병합·배포됐지만, **기능 노출은 Vercel Productio
 ## 구현된 핵심 기능
 
 - **온디바이스 자세 감지** — MediaPipe Pose Landmarker(브라우저 내 추론),
-  5초 개인 기준 캘리브레이션, 개인 기준 대비 상대 변화만 판정
+  5초 개인 기준 캘리브레이션, 개인 기준 대비 상대 변화만 판정. 개발용
+  `?postureDebug=1`에서는 TF.js MoveNet/WASM의 10프레임 성능 진단을 실행할 수 있음
 - **회복 게임** — 이탈 5초 지속 → 회복 기회(30초 창) → 기준 복귀 5초 → 특수 공격
   (괴물 -40 · XP +25 · 잎사귀 +5, 세션당 XP 보상 상한 5회, 냉각 20초)
 - **집중 세션** — 25분 기본(15/50분·3분 데모), 직접 설정 5~120분,
@@ -74,6 +78,8 @@ v1.1.0 은 main 에 병합·배포됐지만, **기능 노출은 Vercel Productio
 
 - 모든 영상 분석은 브라우저 안에서만 수행합니다.
 - 카메라 영상·사진·프레임·랜드마크 원본은 저장·전송하지 않습니다.
+- 캘리브레이션의 조도·대비·움직임 품질 게이트는 32×24 메모리 캔버스에서만
+  계산하고 즉시 폐기합니다.
 - 로컬에는 개인 기준 **요약값**과 세션 집계만 저장합니다.
 - 친구 방에는 닉네임·진행 상태·성공 이벤트만 전송합니다
   (bad 상태·자세 좌표·개인 기준은 전송 금지, 코드 레벨에서 차단).
@@ -93,6 +99,7 @@ npm run lint
 npm run typecheck
 npm run test       # Vitest 단위 테스트
 npm run test:e2e   # Playwright (자체 서버, 포트 5273)
+npm run ai:eval:fixtures # Gemini 키 없이 AI 회고 스키마·안전 문구 회귀 평가
 npm run build
 ```
 
@@ -102,12 +109,22 @@ npm run build
 npx playwright test e2e/room-live.spec.ts
 ```
 
+Gemini 키를 설정한 Preview 또는 로컬 서버에서는 실제 모델 회귀 평가도 실행합니다.
+
+```bash
+npm run ai:eval
+```
+
 ## 환경 변수 (이름만 — 값은 Vercel·.env.local 에)
 
 | 이름 | 용도 |
 |---|---|
 | `VITE_ENABLE_CAMERA` | 실제 웹캠 자세 감지 on/off |
 | `VITE_ENABLE_PIP` | PIP 미니 위젯 자동 열기 on/off (현재 Production 미설정 = off) |
+| `VITE_ENABLE_AI_REPORT` | 결과 화면의 사용자 요청형 AI 세션 회고 on/off |
+| `AI_REPORT_ENABLED` | Vercel 서버 함수의 Gemini 호출 on/off (클라이언트 노출 금지) |
+| `GEMINI_API_KEY` | Gemini 서버 전용 API 키 (`VITE_` 접두어 금지) |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | 선택: 원문 없는 AI 운영 관찰용 서버 키 |
 | `VITE_ENABLE_FRIEND_ROOM` | 2인 친구 방 on/off |
 | `VITE_ENABLE_REALTIME` | Supabase Realtime 구독 on/off |
 | `VITE_ENABLE_CAMPUS_THEME` | 캠퍼스 학교 테마 on/off (v1.1) |
@@ -116,6 +133,8 @@ npx playwright test e2e/room-live.spec.ts
 | `VITE_SUPABASE_URL` | Supabase 프로젝트 URL |
 | `VITE_SUPABASE_ANON_KEY` | Supabase publishable key |
 | `VITE_ENABLE_QA_LAB` | 개발용 QA Lab (운영 기본 off) |
+
+AI 회고는 결과 화면에서 사용자가 직접 동의하고 요청할 때만 세션 집계 8개를 서버로 보냅니다. 영상·사진·좌표·자세 상태·목표 문구·세션 식별자는 전송하지 않습니다. 자세한 기준은 [docs/14_DATA_PRIVACY_SECURITY.md](docs/14_DATA_PRIVACY_SECURITY.md)를 따릅니다.
 
 친구 방 백엔드는 `supabase/schema.sql` 로 구성합니다
 (RLS + RPC 원자적 보스 HP, Anonymous Sign-Ins 필요).
