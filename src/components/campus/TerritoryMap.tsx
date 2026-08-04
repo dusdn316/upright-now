@@ -7,6 +7,7 @@ import { useCampusThemeStore } from '@/features/campus/campusThemeStore'
 import { useSchoolIdentity, resolveSchoolIdentityNow } from '@/features/campus/schoolDirectory'
 import type { CampusTile } from '@/features/campus/types'
 import { CampusBattleOverlay } from './CampusBattleOverlay'
+import { SeoulMapLayer } from './SeoulMapLayer'
 
 /**
  * 캠퍼스 배경 이미지의 실측 12×8 = 96칸 오버레이 지도.
@@ -105,6 +106,9 @@ export function TerritoryMap({
           // 이미지 실패 폴백 — 배경 없이도 격자와 상태는 그대로 동작
           <rect x="0" y="0" width="1536" height="1024" fill="#EAE4D3" />
         )}
+        <g transform="scale(1.39636 1.13778)" pointerEvents="none">
+          <SeoulMapLayer />
+        </g>
         {ordered.map((tile) => {
           const cell = gridCellFor(tile)
           if (!cell) return null

@@ -94,7 +94,7 @@ export function CampusMap() {
     >
       <PageHeader
         title="캠퍼스 지도"
-        description="자체 제작한 12×8 가상 캠퍼스예요. 실제 지도나 학교 부지를 복제하지 않았어요."
+        description="서울 25개 자치구와 한강을 바탕으로 만든 영토전 지도예요. 실제 행정경계를 복제하지 않은 프로토타입이에요."
         action={
           <div className="flex items-center gap-2">
             {isExamPeriod && <Badge tone="yellow">시험기간 배경</Badge>}
@@ -117,7 +117,7 @@ export function CampusMap() {
         <Card>
           <CardTitle>영토 지도</CardTitle>
           <p className="mt-1 text-xs text-ink-soft">
-            타일을 누르면 현재 점령 학교와 점령 진행도를 볼 수 있어요.
+            서울 지도 위 타일을 누르면 현재 점령 학교와 점령 진행도를 볼 수 있어요.
           </p>
           <div className="mt-4">
             <TerritoryMap

@@ -217,7 +217,7 @@ export function Campus() {
                 </div>
               </div>
               <p className="mt-1 text-xs text-ink-soft">
-                자체 제작한 12×8 가상 캠퍼스예요. 실제 지도나 학교 부지를 옮겨 놓은 것이 아니에요.
+                서울 25개 자치구와 한강을 바탕으로 만든 영토전 베이스예요. 실제 행정경계를 복제하지 않은 프로토타입이에요.
               </p>
               <CampusCompetitionSummary tiles={snapshot.tiles} />
               <div className="mt-4">
