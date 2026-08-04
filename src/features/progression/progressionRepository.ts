@@ -24,14 +24,14 @@ export async function syncProgressionReward(input: {
     const { data: session } = await supabase.auth.getSession()
     if (!session.session?.user) return
 
-    const { error } = await supabase.rpc('apply_progression_reward', {
+    const { data, error } = await supabase.rpc('apply_progression_reward', {
       p_event_id: input.eventId,
       p_event_type: input.eventType,
       p_source_session_id: input.sessionId ?? null,
       p_metadata: {
         client: 'web',
         schema_version: 1,
-        ...(input.metadata ?? {}),
+        ...input.metadata,
       },
       p_planned_minutes: input.plannedMinutes ?? null,
     })
@@ -40,6 +40,16 @@ export async function syncProgressionReward(input: {
       // 서버 migration을 아직 적용하지 않은 개발 환경도 계속 사용할 수
       // 있어야 하므로, 동기화 실패는 로컬 보상 흐름을 막지 않습니다.
       console.warn('[progression] 서버 보상 동기화 실패', error.message)
+      return
+    }
+
+    // 서버가 계산한 잔액을 최종 기준으로 사용합니다. 길이별 보상·일일 상한·중복
+    // 이벤트가 적용된 뒤에도 로컬의 낙관적 숫자가 실제 잔액과 어긋나지 않습니다.
+    const row = Array.isArray(data) ? data[0] : data
+    const totalXp = Number((row as { total_xp?: unknown } | null)?.total_xp)
+    const totalPoints = Number((row as { total_points?: unknown } | null)?.total_points)
+    if (Number.isFinite(totalXp) && Number.isFinite(totalPoints)) {
+      useProgressionStore.setState({ xp: Math.max(0, totalXp), points: Math.max(0, totalPoints) })
     }
   } catch (error) {
     console.warn('[progression] 서버 보상 동기화 예외', error)
