@@ -30,9 +30,15 @@ import { featureFlags } from '@/lib/feature-flags/flags'
 import { useRoomStore } from '@/features/rooms/roomStore'
 import { leaveRoom, setMyState } from '@/features/rooms/roomService'
 import { useToast } from '@/app/providers/ToastProvider'
-import { closePip, openPip, registerAutoPip } from '@/features/pip/pipController'
+import {
+  closePip,
+  openPip,
+  registerAutoPip,
+  setPipCameraStream,
+} from '@/features/pip/pipController'
 import { usePipStore } from '@/features/pip/pipStore'
 import { MiniPostureWidget } from '@/components/session/MiniPostureWidget'
+import { SessionCameraPanel } from '@/components/session/CameraStreamPreview'
 import { CoopArena } from '@/components/game/CoopArena'
 import { useAttackSequence } from '@/features/game/useAttackSequence'
 import { MONSTER_THEMES, useActiveModeConfig } from '@/features/modes/modeStore'
@@ -63,6 +69,7 @@ export function Session() {
   const soundEnabled = useUserStore((s) => s.soundEnabled)
   const toggleSound = useUserStore((s) => s.toggleSound)
   const hasCalibration = useUserStore((s) => s.hasCalibration)
+  const pipAutoOpen = useUserStore((s) => s.pipAutoOpen)
   const isDemo = useDemoStore((s) => s.isDemo)
   const snapshot = usePostureStore((s) => s.snapshot)
   const notice = usePostureStore((s) => s.notice)
@@ -90,8 +97,8 @@ export function Session() {
 
   // 비데모 세션은 자세 기준 없이는 시작할 수 없습니다. (3분 데모만 예외)
   const calibrationRequired = featureFlags.camera && !isDemo && !hasProfile
-  const { state: camera, start: startCamera, stop: stopCamera } =
-    useCamera(videoRef)
+  const { state: camera, stream: cameraStream, start: startCamera, stop: stopCamera } =
+    useCamera(videoRef, { keepStreamOnUnmount: true })
   useLiveClassifier(videoRef, camera)
 
   // 회복 수명주기를 굴리는 상태 머신 티커 (카메라·QA 공통)
@@ -102,8 +109,6 @@ export function Session() {
     if (useRealCamera && session.status === 'running') startCamera()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useRealCamera, session.status === 'running'])
-
-  useEffect(() => stopCamera, [stopCamera])
 
   // 1초 틱. 자세로 집중 여부를 추론하지 않고, 시작 시점부터 시간만 잽니다.
   useEffect(() => {
@@ -218,18 +223,25 @@ export function Session() {
       pendingUnmountFinalize = window.setTimeout(() => {
         const current = useSessionStore.getState()
         if (current.status === 'running' || current.status === 'paused') {
+          stopCamera()
           finalizeSession('manual')
           closePip()
         }
       }, 0)
     }
-  }, [])
+  }, [stopCamera])
 
   // PiP 폴백 상태 + 자동 PiP(선택 확장, 카메라 사용 중일 때만 의미)
   const pipFallback = usePipStore((s) => s.fallbackActive)
   useEffect(() => {
-    if (useRealCamera && session.status === 'running') registerAutoPip()
-  }, [useRealCamera, session.status])
+    setPipCameraStream(cameraStream)
+  }, [cameraStream])
+
+  useEffect(() => {
+    if (useRealCamera && session.status === 'running' && pipAutoOpen) {
+      registerAutoPip(cameraStream)
+    }
+  }, [useRealCamera, session.status, cameraStream, pipAutoOpen])
 
   // 친구 방 세션 — 공동 보스 표시 + 친구 성공 이벤트·기린 싱크 알림
   const roomPhase = useRoomStore((s) => s.phase)
@@ -337,31 +349,32 @@ export function Session() {
       {/* PiP 미지원·차단 시 화면 안 미니 위젯 (카메라 영상 미포함) */}
       {pipFallback && session.status !== 'idle' && <MiniPostureWidget />}
 
-      {/* 자세 분석용 비디오. 화면에 크게 노출하지 않습니다. (docs/05 S-09) */}
       {useRealCamera && (
         <video
           ref={videoRef}
           playsInline
           muted
-          className="pointer-events-none fixed bottom-3 right-3 h-24 w-32 -scale-x-100 rounded-xl border border-line object-cover opacity-80"
+          aria-hidden="true"
+          className="pointer-events-none fixed h-px w-px opacity-0"
         />
       )}
 
-      {/* 상단 — 과목·목표만 간결하게 */}
       <BackButton
         fallback={ROUTES.home}
         onClick={isActive ? () => setLeaveConfirmOpen(true) : undefined}
       />
-      <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-ink-soft">
+          <p className="text-xs font-bold tracking-wide text-ink-soft">
             {session.subject || '집중 세션'}
           </p>
-          <h1 className="truncate text-2xl font-bold text-ink">
+          <h1 className="truncate text-3xl font-bold tracking-tight text-ink">
             {session.goal || '오늘의 목표를 끝내는 시간'}
           </h1>
         </div>
-        <PostureStatusBadge state={snapshot.state} quality={snapshot.quality} />
+        <p className="rounded-full bg-surface px-3 py-1.5 text-xs font-semibold text-ink-soft shadow-card">
+          처음 등록한 기준과 비교 중
+        </p>
       </header>
 
       {session.status === 'idle' && calibrationRequired && (
@@ -404,8 +417,8 @@ export function Session() {
                 // 친구들에게도 집중 중으로 보이게 합니다.
                 if (session.mode === 'room') void setMyState('focusing')
                 // PiP 는 사용자 제스처 필요 — 같은 click handler 에서 요청
-                if (useUserStore.getState().pipAutoOpen) {
-                  void openPip().then((result) => {
+                if (useUserStore.getState().pipAutoOpen && document.hidden) {
+                  void openPip(cameraStream).then((result) => {
                     if (result !== 'opened') {
                       push({
                         title:
@@ -533,7 +546,7 @@ export function Session() {
                 </div>
                 <div className="min-w-0 flex-1 text-center sm:text-left">
                   <PostureMessage state={snapshot.state} />
-                  <p className="mt-2 text-sm text-ink-soft">
+                  <p className="mt-2 text-sm text-ink">
                     처음 등록한 개인 기준과 비교한 변화만 알려드려요.
                   </p>
                   <div className="mt-5 flex justify-center sm:justify-start">
@@ -541,6 +554,16 @@ export function Session() {
                   </div>
                 </div>
               </div>
+
+              {useRealCamera && (
+                <div className="mt-5 max-w-[280px] sm:ml-auto">
+                  <SessionCameraPanel
+                    stream={cameraStream}
+                    status={camera.status}
+                    onRetry={() => void startCamera(camera.deviceId ?? undefined)}
+                  />
+                </div>
+              )}
 
               <div className="mt-4 rounded-2xl bg-surface/80 p-4">
                 {/* 1.4~2.5초: 피격·흔들림·피해 숫자 (bossHitTick 지연 틱) */}
@@ -568,14 +591,44 @@ export function Session() {
           )}
         </Card>
 
-        {/* 오른쪽 — 남은 시간 · 이번 세션 · 제어 */}
         <div className="flex flex-col gap-3">
-          <Card className="p-5">
-            <SessionTimer remaining={remaining} />
+          <Card tone="canvas" className={isBad ? 'border-coral p-5' : 'border-pink/30 p-5'}>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold tracking-wide text-ink-soft">
+                  {session.status === 'running'
+                    ? '집중 중'
+                    : session.status === 'paused'
+                      ? '잠시 멈춤'
+                      : session.status === 'completed'
+                        ? '집중 완료'
+                        : '세션 준비'}
+                </p>
+                <div className="mt-1">
+                  <SessionTimer remaining={remaining} />
+                </div>
+              </div>
+              <PostureStatusBadge state={snapshot.state} quality={snapshot.quality} />
+            </div>
+
+            {(session.status === 'running' || session.status === 'paused') && (
+              <Button
+                fullWidth
+                className="mt-5 bg-[#b8285a] hover:bg-[#9f204b]"
+                onClick={() =>
+                  session.status === 'running' ? session.pause() : session.resume()
+                }
+              >
+                {session.status === 'running' ? '잠깐 멈추기' : '집중 이어서 하기'}
+              </Button>
+            )}
           </Card>
 
           <Card className="p-5">
-            <CardTitle>이번 세션</CardTitle>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle>이번 세션 흐름</CardTitle>
+              <span className="text-xs font-semibold text-ink-soft">실시간 집계</span>
+            </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <StatTile
                 label="회복 성공"
@@ -599,45 +652,49 @@ export function Session() {
             </div>
           </Card>
 
-          <Card className="p-5">
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" onClick={toggleSound}>
-                {soundEnabled ? '소리 끄기' : '소리 켜기'}
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  // 사용자 클릭(제스처) 기반 PiP 열기 — 실패 시 화면 안 위젯
-                  void openPip().then((result) => {
-                    if (result !== 'opened') {
-                      push({
-                        title:
-                          '작은 별도 창을 열지 못해 화면 안 미니 위젯으로 표시해요.',
-                        tone: 'info',
+          <Card className="overflow-hidden p-0">
+            <details>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-ink marker:content-none [&::-webkit-details-marker]:hidden">
+                <span>집중 도구와 종료</span>
+                <span aria-hidden="true" className="rounded-lg bg-canvas px-2 py-1 text-xs text-ink-soft">
+                  열기
+                </span>
+              </summary>
+              <div className="border-t border-line px-5 pt-4 pb-5">
+                <p className="text-xs leading-5 text-ink-soft">
+                  소리, 미니 위젯, 스트레칭은 필요할 때만 열어 집중 화면을 가볍게 유지해요.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" onClick={toggleSound}>
+                    {soundEnabled ? '소리 끄기' : '소리 켜기'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      // 사용자 클릭(제스처) 기반 PiP 열기 — 실패 시 화면 안 위젯
+                      void openPip(cameraStream).then((result) => {
+                        if (result !== 'opened') {
+                          push({
+                            title:
+                              '작은 별도 창을 열지 못해 화면 안 미니 위젯으로 표시해요.',
+                            tone: 'info',
+                          })
+                        }
                       })
-                    }
-                  })
-                }}
-              >
-                미니 위젯 열기
-              </Button>
-              <Button size="sm" variant="secondary" onClick={goStretch}>
-                잠깐 스트레칭
-              </Button>
-              {session.status === 'running' ? (
-                <Button size="sm" variant="ghost" onClick={() => session.pause()}>
-                  일시정지
-                </Button>
-              ) : session.status === 'paused' ? (
-                <Button size="sm" variant="ghost" onClick={() => session.resume()}>
-                  이어서 하기
-                </Button>
-              ) : null}
-              <Button size="sm" variant="secondary" onClick={endSession}>
-                세션 종료
-              </Button>
-            </div>
+                    }}
+                  >
+                    미니 위젯 열기
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={goStretch}>
+                    잠깐 스트레칭
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={endSession}>
+                    세션 종료
+                  </Button>
+                </div>
+              </div>
+            </details>
           </Card>
 
           {session.status === 'completed' && (

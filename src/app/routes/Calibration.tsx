@@ -7,7 +7,9 @@ import { ROUTES } from '@/constants/routes'
 import { PRIVACY } from '@/constants/copy'
 import { featureFlags } from '@/lib/feature-flags/flags'
 import { useCamera } from '@/features/calibration/useCamera'
+import { useFrameQuality } from '@/features/calibration/useFrameQuality'
 import { usePoseDetection, type PoseFrame } from '@/features/posture-engine/usePoseDetection'
+import type { MoveNetBenchmarkResult } from '@/features/posture-engine/tfjsMoveNetBenchmark'
 import {
   collectStep,
   createCollectState,
@@ -30,6 +32,9 @@ const QUALITY_COPY: Record<CalibrationQuality, string> = {
   'no-person': '화면 중앙에 앉아 얼굴이 보이도록 해 주세요.',
   'low-visibility': '얼굴과 양쪽 어깨가 보이게 앉고 주변을 조금 밝혀 주세요.',
   moving: '잠깐 편안한 자세를 유지해 주세요.',
+  dim: '주변을 조금 밝혀 주세요. 프레임 품질을 확인한 뒤 기준을 등록할게요.',
+  'low-contrast': '얼굴과 어깨가 배경과 구분되도록 주변을 조금 밝혀 주세요.',
+  'camera-motion': '카메라가 흔들리지 않도록 잠깐 고정해 주세요.',
   rotated: '화면 정면을 바라봐 주세요.',
   tilted: '선에 정확히 맞출 필요는 없어요. 얼굴과 양쪽 어깨가 모두 보이도록 편안하게 앉아 주세요.',
   timeout: '표본을 충분히 모으지 못했어요. 자세를 잡고 다시 시작할게요.',
@@ -50,7 +55,7 @@ const CAMERA_ERROR_COPY: Record<string, string> = {
  * 허용 범위(roll ≤ ROLL_LIMIT_DEG)는 초록, 과도한 기울임은 코랄.
  * 판정은 픽셀 위치가 아니라 shoulder width ratio·face scale·safe area 기반입니다.
  */
-function DynamicFramingGuide({ analysis }: { analysis: LandmarkAnalysis | null }) {
+function LegacyDynamicFramingGuide({ analysis }: { analysis: LandmarkAnalysis | null }) {
   const seg = (a: PointName, b: PointName) => {
     if (!analysis) return null
     const p = analysis.points[a]
@@ -64,7 +69,7 @@ function DynamicFramingGuide({ analysis }: { analysis: LandmarkAnalysis | null }
         y1={p.y * 100}
         x2={q.x * 100}
         y2={q.y * 100}
-        stroke={ok ? '#4ade80' : '#ff6464'}
+        stroke={ok ? '#5F8FF7' : '#F45B8D'}
         strokeWidth={1.1}
         strokeLinecap="round"
       />
@@ -81,6 +86,116 @@ function DynamicFramingGuide({ analysis }: { analysis: LandmarkAnalysis | null }
       >
         {seg('leftEyeOuter', 'rightEyeOuter')}
         {seg('leftShoulder', 'rightShoulder')}
+      </svg>
+    </div>
+  )
+}
+
+function DynamicFramingGuide({ analysis }: { analysis: LandmarkAnalysis | null }) {
+  return (
+    <>
+      <EnhancedFramingGuide analysis={analysis} />
+      <div hidden>
+        <LegacyDynamicFramingGuide analysis={analysis} />
+      </div>
+    </>
+  )
+}
+
+function EnhancedFramingGuide({ analysis }: { analysis: LandmarkAnalysis | null }) {
+  const earY = analysis?.earsOk
+    ? ((analysis.points.leftEar.y + analysis.points.rightEar.y) / 2) * 100
+    : 34
+  const shoulderY = analysis?.bothShouldersOk
+    ? ((analysis.points.leftShoulder.y + analysis.points.rightShoulder.y) / 2) * 100
+    : 76
+  const ready = Boolean(
+    analysis?.faceCoreOk && analysis.bothShouldersOk && analysis.inFrame,
+  )
+  const guidePoint = (name: PointName, fallbackX: number, fallbackY: number) => {
+    const point = analysis?.points[name]
+    return point?.present ? { x: point.x * 100, y: point.y * 100 } : { x: fallbackX, y: fallbackY }
+  }
+  const leftEar = guidePoint('leftEar', 30, earY)
+  const rightEar = guidePoint('rightEar', 70, earY)
+
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="calibration-guide"
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+    >
+      <div className="absolute inset-x-[8%] inset-y-[7%] rounded-[1.5rem] border border-white/70 shadow-[inset_0_0_0_1px_rgba(14,40,54,0.08)]" />
+      <div
+        data-testid="calibration-ear-guide"
+        className="absolute inset-x-[8%] flex items-center"
+        style={{ top: `${earY}%` }}
+      >
+        <div className="h-px flex-1 border-t border-dashed border-yellow" />
+        <span className="mx-2 rounded-full bg-ink/80 px-2.5 py-1 text-[10px] font-bold tracking-tight text-white">
+          귀 높이
+        </span>
+        <div className="h-px flex-1 border-t border-dashed border-yellow" />
+      </div>
+      <div
+        data-testid="calibration-shoulder-guide"
+        className="absolute inset-x-[8%] flex items-center"
+        style={{ top: `${shoulderY}%` }}
+      >
+        <div className="h-2 flex-1 rounded-full border border-dashed border-blue/80 bg-blue/10" />
+        <span className="mx-2 rounded-full border border-blue/40 bg-canvas/90 px-2.5 py-1 text-[10px] font-bold tracking-tight text-blue">
+          어깨 폭
+        </span>
+        <div className="h-2 flex-1 rounded-full border border-dashed border-blue/80 bg-blue/10" />
+      </div>
+      <div className="absolute left-[8%] top-[7%] rounded-full border border-white/60 bg-ink/75 px-3 py-1.5 text-[10px] font-bold text-white">
+        {ready ? '측정 가능' : '얼굴과 어깨를 맞춰 주세요'}
+      </div>
+      <div className="absolute inset-x-3 bottom-3 rounded-xl border border-white/20 bg-ink/85 px-3 py-2 text-center text-[10px] font-semibold tracking-tight text-white/90">
+        기준점은 이 화면에서만 확인하고, 영상은 저장하지 않아요
+      </div>
+      <svg
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        className="absolute inset-0 h-full w-full -scale-x-100"
+      >
+        <line
+          x1={leftEar.x}
+          y1={leftEar.y}
+          x2={rightEar.x}
+          y2={rightEar.y}
+          stroke="#F2C94C"
+          strokeWidth={0.7}
+          strokeDasharray="1.5 1.5"
+        />
+        <line
+          x1={
+            analysis?.points.leftShoulder.present
+              ? analysis.points.leftShoulder.x * 100
+              : 20
+          }
+          y1={shoulderY}
+          x2={
+            analysis?.points.rightShoulder.present
+              ? analysis.points.rightShoulder.x * 100
+              : 80
+          }
+          y2={shoulderY}
+          stroke="#5F8FF7"
+          strokeWidth={0.8}
+          strokeDasharray="1 1"
+        />
+        {[leftEar, rightEar].map((point, index) => (
+          <circle
+            key={index}
+            cx={point.x}
+            cy={point.y}
+            r={2.1}
+            fill="#F2C94C"
+            stroke="#0E2836"
+            strokeWidth={0.7}
+          />
+        ))}
       </svg>
     </div>
   )
@@ -141,7 +256,11 @@ export function Calibration() {
   const location = useLocation()
   const videoRef = useRef<HTMLVideoElement>(null)
   const collectRef = useRef(createCollectState())
-  const { state: camera, start, stop } = useCamera(videoRef)
+  const keepStreamOnUnmount =
+    new URLSearchParams(location.search).get('return')?.startsWith('/session/') ?? false
+  const { state: camera, start, stop } = useCamera(videoRef, {
+    keepStreamOnUnmount,
+  })
   const addProfile = useCalibrationStore((s) => s.addProfile)
   const setCalibrated = useUserStore((s) => s.setCalibrated)
 
@@ -162,11 +281,19 @@ export function Calibration() {
       : null
   const [modelError, setModelError] = useState(false)
   const [lastAnalysis, setLastAnalysis] = useState<LandmarkAnalysis | null>(null)
+  const [benchmark, setBenchmark] = useState<MoveNetBenchmarkResult | null>(null)
+  const [benchmarkLoading, setBenchmarkLoading] = useState(false)
+  const frameQuality = useFrameQuality(
+    videoRef,
+    featureFlags.camera && camera.status === 'ready' && !saved,
+  )
 
   useEffect(() => {
     if (!featureFlags.camera) return
     start()
-    return stop
+    return () => {
+      if (!keepStreamOnUnmount) stop()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -179,6 +306,8 @@ export function Calibration() {
         analysis: frame.multiPerson ? null : frame.analysis,
         now: performance.now(),
         deviceIdHash: hashDeviceId(camera.deviceId),
+        frameQuality:
+          frameQuality.quality === 'pending' ? undefined : frameQuality.quality,
       })
       collectRef.current = step.state
       setQuality(step.quality)
@@ -206,6 +335,23 @@ export function Calibration() {
   useEffect(() => {
     if (modelStatus === 'error') setModelError(true)
   }, [modelStatus])
+
+  const runMoveNetBenchmark = async () => {
+    const video = videoRef.current
+    if (!video || camera.status !== 'ready') return
+
+    setBenchmarkLoading(true)
+    try {
+      const { benchmarkMoveNet } = await import(
+        '@/features/posture-engine/tfjsMoveNetBenchmark'
+      )
+      setBenchmark(await benchmarkMoveNet(video))
+    } catch {
+      setBenchmark({ status: 'error', message: 'MoveNet/WASM 진단을 준비하지 못했어요.' })
+    } finally {
+      setBenchmarkLoading(false)
+    }
+  }
 
   if (!featureFlags.camera) {
     return (
@@ -304,7 +450,7 @@ export function Calibration() {
               <Button
                 className="mt-4"
                 onClick={() => {
-                  stop()
+                  if (!keepStreamOnUnmount) stop()
                   navigate(returnTo ?? ROUTES.sessionSetup)
                 }}
               >
@@ -324,6 +470,18 @@ export function Calibration() {
               <p className="mt-2 text-xs text-ink-soft tabular">
                 {`유효 표본 ${validCount} / ${MIN_VALID_SAMPLES}`}
               </p>
+              {frameQuality.quality !== 'pending' && (
+                <p className="mt-1 text-xs text-ink-soft">
+                  {`카메라 환경: ${
+                    frameQuality.quality === 'good'
+                      ? '캘리브레이션에 쓸 수 있는 프레임이에요.'
+                      : QUALITY_COPY[
+                          frameQuality.quality === 'motion'
+                            ? 'camera-motion'
+                            : frameQuality.quality
+                        ]}`}
+                </p>
+              )}
               <ol className="mt-4 flex flex-col gap-1.5 text-xs">
                 {['얼굴과 양쪽 어깨 확인', '편안한 자세로 5초 유지', '기준 저장 완료'].map((label, i) => (
                   <li key={label} className={'flex items-center gap-2 ' + (uiStep === i + 1 ? 'font-bold text-ink' : 'text-ink-soft')}>
@@ -331,6 +489,31 @@ export function Calibration() {
                   </li>
                 ))}
               </ol>
+              {debugOverlay && (
+                <div className="mt-5 border-t border-line pt-4">
+                  <p className="text-xs font-bold text-ink">개발용 보조 엔진 진단</p>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-soft">
+                    MoveNet/WASM을 10프레임만 측정해 MediaPipe와의 성능 비교 근거로 씁니다.
+                    이 결과와 프레임은 저장하거나 전송하지 않아요.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="mt-3"
+                    disabled={benchmarkLoading || camera.status !== 'ready'}
+                    onClick={() => void runMoveNetBenchmark()}
+                  >
+                    {benchmarkLoading ? 'MoveNet/WASM 측정 중…' : 'MoveNet/WASM 10프레임 측정'}
+                  </Button>
+                  {benchmark && (
+                    <p className="mt-2 text-xs text-ink-soft" aria-live="polite">
+                      {benchmark.status === 'ready'
+                        ? `WASM · 로드 ${benchmark.loadMs}ms · 중앙 추론 ${benchmark.medianInferenceMs}ms · 약 ${benchmark.estimatedFps}fps · 감지 ${benchmark.detectedFrames}/${benchmark.sampleCount}`
+                        : benchmark.message}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </Card>
