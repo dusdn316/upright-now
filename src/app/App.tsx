@@ -32,9 +32,10 @@ function CampusAuthCallbackBridge() {
     if (!pending && !hasCode && !hasToken) return
 
     void consumeAuthCallback().then((authenticated) => {
-      if (authenticated && window.location.pathname !== ROUTES.campus) {
-        navigate(ROUTES.campus, { replace: true })
-      }
+      if (!authenticated) return
+      // 앱 초기화보다 인증 콜백이 늦게 끝나는 경우에도 서버 성장 잔액을 즉시 복원합니다.
+      void hydrateProgressionFromServer()
+      if (window.location.pathname !== ROUTES.campus) navigate(ROUTES.campus, { replace: true })
     })
   }, [navigate])
 
