@@ -40,25 +40,19 @@ export function TerritoryMap({
         className={large ? 'h-auto min-w-[1100px] md:min-w-[1400px]' : 'h-auto w-full'}
         aria-label="서울 자치구 기반 영토전 지도"
       >
-        <defs>
-          <linearGradient id="seoul-map-paper" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#FFFDF7" />
-            <stop offset="1" stopColor="#F4EFE4" />
-          </linearGradient>
-          <linearGradient id="seoul-river" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="#BFE7E8" />
-            <stop offset="0.5" stopColor="#A5D9E0" />
-            <stop offset="1" stopColor="#BFE7E8" />
-          </linearGradient>
-          <filter id="district-shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#8D8475" floodOpacity="0.14" />
-          </filter>
-        </defs>
-        <rect x="0" y="0" width="600" height="430" rx="24" fill="url(#seoul-map-paper)" />
-        <path d="M0 218 C74 196 122 236 198 218 S326 199 395 220 S523 241 600 210 L600 270 C520 294 456 263 382 279 S235 293 166 268 S72 250 0 278Z" fill="url(#seoul-river)" opacity="0.86" />
-        <path d="M0 218 C74 196 122 236 198 218 S326 199 395 220 S523 241 600 210" fill="none" stroke="#86C9D1" strokeWidth="2" opacity="0.9" />
-        <path d="M0 278 C72 250 94 276 166 268 S235 293 382 279 S520 294 600 270" fill="none" stroke="#86C9D1" strokeWidth="2" opacity="0.9" />
-        <g filter="url(#district-shadow)">
+        <rect x="0" y="0" width="600" height="430" rx="24" fill="#F8F4EA" />
+        <image
+          href="/assets/campus/seoul-district-map.png"
+          x="38"
+          y="0"
+          width="524"
+          height="430"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        />
+        {/* The source image supplies the district boundaries and labels. These paths are
+            intentionally transparent hit areas; only occupied/contested districts are tinted. */}
+        <g transform="matrix(0.8733333 0 0 1 38 0)">
           {districts.map((summary) => {
             const { district, representative, ownerSchoolId, challengerSchoolId } = summary
             const owner = identify(ownerSchoolId)
@@ -83,10 +77,10 @@ export function TerritoryMap({
                       onSelectTile?.(representative)
                     }
                   }}
-                  fill={challenger?.color ?? owner?.color ?? '#F8F4EA'}
-                  fillOpacity={challenger ? Math.max(0.18, 0.18 + progress * 0.52) : owner ? (isMine ? 0.66 : 0.42) : 0.68}
-                  stroke={selected ? '#171717' : challenger ? challenger.color : '#D8CFBF'}
-                  strokeWidth={selected ? 3.5 : challenger ? 2.5 : 1.3}
+                  fill={challenger?.color ?? owner?.color ?? 'transparent'}
+                  fillOpacity={challenger ? Math.max(0.22, 0.22 + progress * 0.5) : owner ? (isMine ? 0.34 : 0.24) : 0}
+                  stroke={selected ? '#171717' : challenger ? challenger.color : owner ? owner.color : 'transparent'}
+                  strokeWidth={selected ? 2.5 : challenger || owner ? 1.8 : 0}
                   strokeDasharray={challenger ? '7 5' : undefined}
                   className={[
                     'transition',
@@ -94,9 +88,6 @@ export function TerritoryMap({
                     summary.tiles.some((tile) => flashTileIds.includes(tile.id)) ? 'anim-campus-capture' : '',
                   ].join(' ')}
                 />
-                <text x={district.labelX} y={district.labelY} textAnchor="middle" fontSize="11" fontWeight="700" fill="#5F594F" pointerEvents="none">
-                  {district.name}
-                </text>
                 {isMine && <text x={district.labelX} y={district.labelY + 16} textAnchor="middle" fontSize="13" fill={owner?.color ?? '#171717'} pointerEvents="none">★</text>}
                 {challenger && <g pointerEvents="none"><rect x={district.labelX - 23} y={district.labelY + 20} width="46" height="4" rx="2" fill="#FFFFFF" opacity="0.8" /><rect x={district.labelX - 23} y={district.labelY + 20} width={46 * progress} height="4" rx="2" fill={challenger.color} /></g>}
               </g>
