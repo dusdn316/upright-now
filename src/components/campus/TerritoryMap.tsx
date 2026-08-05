@@ -3,9 +3,7 @@ import { useCampusStore } from '@/features/campus/campusStore'
 import { useCampusThemeStore } from '@/features/campus/campusThemeStore'
 import { summarizeDistricts, SEOUL_DISTRICTS } from '@/features/campus/seoulDistrictMap'
 import { useSchoolIdentity, resolveSchoolIdentityNow } from '@/features/campus/schoolDirectory'
-import type { CampusGridCell } from '@/features/campus/campusGridOverlay'
 import type { CampusTile } from '@/features/campus/types'
-import { CampusBattleOverlay } from './CampusBattleOverlay'
 
 export function useSchoolColor(): (schoolId: string | null) => string | null {
   const identify = useSchoolIdentity()
@@ -16,14 +14,6 @@ export function schoolShortName(schoolId: string | null): string {
   if (!schoolId) return '중립'
   return resolveSchoolIdentityNow(schoolId)?.shortName ?? '미확인'
 }
-
-const emptyCell = (x: number, y: number): CampusGridCell => ({
-  x: 0,
-  y: 0,
-  points: '',
-  cx: x,
-  cy: y,
-})
 
 /** 서울 자치구 도형 기반 영토 지도. 기존 타일 기록은 자치구별로 합쳐 표시합니다. */
 export function TerritoryMap({
@@ -38,7 +28,6 @@ export function TerritoryMap({
   large?: boolean
 }) {
   const flashTileIds = useCampusStore((s) => s.flashTileIds)
-  const activeBattleScenes = useCampusStore((s) => s.activeBattleScenes)
   const identify = useSchoolIdentity()
   const mySchoolId = useCampusThemeStore((s) => s.schoolId)
   const districts = useMemo(() => summarizeDistricts(tiles), [tiles])
@@ -77,10 +66,6 @@ export function TerritoryMap({
             const progress = summary.defenseScore > 0 ? Math.min(1, summary.challengeScore / summary.defenseScore) : 0
             const selected = representative?.id === selectedTileId
             const isMine = Boolean(mySchoolId) && ownerSchoolId === mySchoolId
-            const battleTile = summary.tiles.find((tile) => activeBattleScenes.some((scene) => scene.tileId === tile.id))
-            const battleScene = battleTile ? activeBattleScenes.find((scene) => scene.tileId === battleTile.id) ?? null : null
-            const battleCell = emptyCell(district.centroidX, district.centroidY)
-            const idleSchool = battleScene ? null : identify(challengerSchoolId ?? ownerSchoolId)
             const label = `${district.name}, ${owner?.shortName ?? '중립'}${challenger ? `, ${challenger.shortName} 경합` : ''}`
 
             return (
@@ -114,13 +99,6 @@ export function TerritoryMap({
                 </text>
                 {isMine && <text x={district.labelX} y={district.labelY + 16} textAnchor="middle" fontSize="13" fill={owner?.color ?? '#171717'} pointerEvents="none">★</text>}
                 {challenger && <g pointerEvents="none"><rect x={district.labelX - 23} y={district.labelY + 20} width="46" height="4" rx="2" fill="#FFFFFF" opacity="0.8" /><rect x={district.labelX - 23} y={district.labelY + 20} width={46 * progress} height="4" rx="2" fill={challenger.color} /></g>}
-                <CampusBattleOverlay
-                  scene={battleScene}
-                  cell={battleCell}
-                  attacker={battleScene && identify(battleScene.attackerSchoolId) ? { name: identify(battleScene.attackerSchoolId)!.displayName, color: identify(battleScene.attackerSchoolId)!.color } : null}
-                  defender={battleScene && identify(battleScene.defenderSchoolId) ? { name: identify(battleScene.defenderSchoolId)!.displayName, color: identify(battleScene.defenderSchoolId)!.color } : null}
-                  idle={idleSchool ? { name: idleSchool.displayName, color: idleSchool.color, role: challengerSchoolId ? 'challenger' : 'owner' } : null}
-                />
               </g>
             )
           })}

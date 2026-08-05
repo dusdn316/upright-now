@@ -57,7 +57,10 @@ export const SEOUL_DISTRICTS: SeoulDistrict[] = [
 const byId = new Map(SEOUL_DISTRICTS.map((district) => [district.id, district]))
 
 /** 기존 12×8 기록을 새 자치구 도형에 표시하기 위한 호환 매핑입니다. */
-export function districtForTile(tile: Pick<CampusTile, 'x' | 'y'>): SeoulDistrict {
+export function districtForTile(tile: Pick<CampusTile, 'id' | 'x' | 'y'>): SeoulDistrict {
+  const directId = tile.id.split(':').at(-1)
+  const direct = directId ? byId.get(directId) : undefined
+  if (direct) return direct
   const x = 24 + (tile.x / 11) * 540
   const y = 20 + (tile.y / 7) * 380
   return SEOUL_DISTRICTS.reduce((closest, district) => {
