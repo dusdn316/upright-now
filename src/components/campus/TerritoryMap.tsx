@@ -79,9 +79,10 @@ export function TerritoryMap({
                   }}
                   fill={challenger?.color ?? owner?.color ?? 'transparent'}
                   fillOpacity={challenger ? Math.max(0.22, 0.22 + progress * 0.5) : owner ? (isMine ? 0.34 : 0.24) : 0}
-                  stroke={selected ? '#171717' : challenger ? challenger.color : owner ? owner.color : 'transparent'}
-                  strokeWidth={selected ? 2.5 : challenger || owner ? 1.8 : 0}
-                  strokeDasharray={challenger ? '7 5' : undefined}
+                  /* The raster map already contains the authoritative boundaries.
+                     Never draw the old approximation on top of it. */
+                  stroke="none"
+                  strokeWidth="0"
                   className={[
                     'transition',
                     representative && onSelectTile ? 'cursor-pointer hover:brightness-105' : '',
