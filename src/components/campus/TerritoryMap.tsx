@@ -52,7 +52,8 @@ export function TerritoryMap({
         />
         {/* The source image supplies the district boundaries and labels. These paths are
             intentionally transparent hit areas; only occupied/contested districts are tinted. */}
-        <g transform="matrix(0.8733333 0 0 1 38 0)">
+        {/* GeoJSON paths use the same 480×394 coordinate space as the raster map. */}
+        <g transform="matrix(1.0916667 0 0 1.0913706 38 0)">
           {districts.map((summary) => {
             const { district, representative, ownerSchoolId, challengerSchoolId } = summary
             const owner = identify(ownerSchoolId)
@@ -79,10 +80,9 @@ export function TerritoryMap({
                   }}
                   fill={challenger?.color ?? owner?.color ?? 'transparent'}
                   fillOpacity={challenger ? Math.max(0.22, 0.22 + progress * 0.5) : owner ? (isMine ? 0.34 : 0.24) : 0}
-                  /* The raster map already contains the authoritative boundaries.
-                     Never draw the old approximation on top of it. */
-                  stroke="none"
-                  strokeWidth="0"
+                  stroke={selected ? '#171717' : challenger ? challenger.color : owner ? owner.color : 'none'}
+                  strokeWidth={selected ? 2.5 : challenger || owner ? 1.6 : 0}
+                  strokeDasharray={challenger ? '7 5' : undefined}
                   className={[
                     'transition',
                     representative && onSelectTile ? 'cursor-pointer hover:brightness-105' : '',
