@@ -21,7 +21,7 @@ import { TerritoryLegend, TerritoryMap } from '@/components/campus/TerritoryMap'
 import type { CampusZoneId } from '@/features/campus/types'
 
 /**
- * S-C2 캠퍼스 지도 — 타일을 골라 다음 기여를 어디에 넣을지 정합니다.
+ * S-C2 캠퍼스 지도 — 자치구를 골라 다음 기여를 어디에 넣을지 정합니다.
  * 시험기간 배경은 시즌 종료 3일 이내에 켜집니다.
  */
 const EXAM_WINDOW_MS = 3 * 24 * 60 * 60 * 1000
@@ -56,7 +56,7 @@ export function CampusMap() {
       rail={
         <>
           <Card className="p-4">
-            <CardTitle>선택한 타일</CardTitle>
+            <CardTitle>선택한 자치구</CardTitle>
             <div className="mt-3">
               <CampusTileDetail tile={selected} />
             </div>
