@@ -117,7 +117,7 @@ export function CampusMap() {
         <Card>
           <CardTitle>영토 지도</CardTitle>
           <p className="mt-1 text-xs text-ink-soft">
-            서울 지도 위 타일을 누르면 현재 점령 학교와 점령 진행도를 볼 수 있어요.
+            서울 자치구를 누르면 현재 점령 학교와 점령 진행도를 볼 수 있어요.
           </p>
           <div className="mt-4">
             <TerritoryMap

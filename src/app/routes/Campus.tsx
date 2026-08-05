@@ -52,10 +52,10 @@ function CampusCompetitionSummary({
               contested.length > 0 ? 'animate-pulse bg-coral' : 'bg-ink-soft/40',
             ].join(' ')}
           />
-          {contested.length > 0 ? `현재 경합 중 ${contested.length}칸` : '현재 경합 중인 타일 없음'}
+          {contested.length > 0 ? `현재 경합 중 ${contested.length}곳` : '현재 경합 중인 자치구 없음'}
         </div>
         <span className="text-[11px] text-ink-soft">
-          {contested.length > 0 ? '공격·방어 기여가 실시간으로 반영돼요' : '기여가 쌓이면 경합 상태로 표시돼요'}
+          {contested.length > 0 ? '공격·방어 기여가 실시간으로 반영돼요' : '기여가 쌓이면 자치구 경합으로 표시돼요'}
         </span>
       </div>
 
@@ -90,7 +90,7 @@ function CampusCompetitionSummary({
       )}
 
       {contested.length > 4 && (
-        <p className="mt-1 text-[10px] text-ink-soft">{`외 ${contested.length - 4}칸의 경합도 진행 중이에요.`}</p>
+        <p className="mt-1 text-[10px] text-ink-soft">{`외 ${contested.length - 4}곳의 경합도 진행 중이에요.`}</p>
       )}
     </div>
   )
